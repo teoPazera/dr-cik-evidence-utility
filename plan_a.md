@@ -1,7 +1,7 @@
 # Evidence-Utility Track: Plan for Stages U0 and U1
 
-Status: draft for Teo's review, revised 2026-09-18. This project starts from nothing: no code, no environment, no data snapshot, and no stage has been run. Facts about external repositories in section 1 are taken from public READMEs and papers and have **not** been verified by this project; U0.1 verifies them.
-Companion file: `plan_a_follow_up.txt` (provisional outline for U2 to U7; will change after U0, U1 and the supervisor discussion).
+Status: draft for Teo's review, revised 2026-09-18. Section 1 was corrected after U0.1 and U0.2 against the loaded data (see `artifacts/u0/data_audit.md`); stages U0.1 to U0.3 are complete and committed, U0.4 onwards has not started.
+Companion file: `plan_a_follow_up.md` (provisional outline for U2 to U7; will change after U0, U1 and the supervisor discussion).
 
 ---
 
@@ -29,30 +29,34 @@ Rules of work:
 
 **CiK** (Context is Key; Williams et al., ICML 2025, arXiv:2410.18959) is a benchmark where the relevant text is handed to the forecaster directly. Code: `ServiceNow/context-is-key-forecasting` on GitHub.
 
-**Dr-CiK** (Tang et al., 2026, arXiv:2605.27904) removes that assumption. Each task pairs a time series with a corpus of about 37 to 40 Markdown documents. Some documents are *supporting* (they contain the evidence needed to forecast well). The rest are *distractors*, exactly five of each of five subtypes: `confounder`, `noisy`, `timeseries`, `profile`, `temporal`. A deep research (DR) agent is supposed to find the supporting evidence, reject the distractors, and pass useful context to a forecaster. The paper reports that agents recover little of the evidence, cite distractors often, and that raw supporting documents passed to a forecaster without synthesis can make forecasts worse than no context.
+**Dr-CiK** (Tang et al., 2026, arXiv:2605.27904) removes that assumption. Each task pairs a time series with a corpus of 30 to 74 Markdown documents (median 37; the paper's "about 37 to 40" undersells the spread). Some documents are *supporting* (they contain the evidence needed to forecast well). The rest are *distractors*, exactly five of each of five subtypes: `confounder`, `noisy`, `timeseries`, `profile`, `temporal`. A deep research (DR) agent is supposed to find the supporting evidence, reject the distractors, and pass useful context to a forecaster. The paper reports that agents recover little of the evidence, cite distractors often, and that raw supporting documents passed to a forecaster without synthesis can make forecasts worse than no context.
 
-### 1.2 What Dr-CiK has released (from the public README and paper; unverified by this project, verify in U0.1)
+### 1.2 What Dr-CiK has released (verified in U0.1 and U0.2 against Hugging Face revision `00fbe820`, Dr-CiK commit `4acbafe1`)
 
-Sources: GitHub `ServiceNow/Dr-CiK` (`README.md`, `SUBMISSION.md`, `sample/`), Hugging Face dataset `ServiceNow/Dr-CiK`.
+Sources: GitHub `ServiceNow/Dr-CiK` (`README.md`, `SUBMISSION.md`, `sample/`), Hugging Face dataset `ServiceNow/Dr-CiK`. Snapshot fingerprint: `data/fingerprint.json`. Full schema and audit: `artifacts/u0/data_audit.md`.
 
-- 279 tasks, 10,342 documents (3,367 supporting, 6,975 distractor). Licence CC BY 4.0.
+- 279 tasks, 10,342 documents (3,367 supporting, 6,975 distractor). Confirmed by count in U0.1. Licence CC BY 4.0.
 - The README states that the paper's figures (240 tasks / 8,849 documents) describe an earlier release. The public release is the 279-task version.
-- **Dev set:** 199 tasks, `origin = synthetic`, labels public (`future_values` and `gt_evidence` included).
-- **Hidden test set:** 80 tasks, `origin = human`, `future_values` and `gt_evidence` withheld. Filter with the `labels_public` field. These tasks still contain history, `future_timestamps`, documents and metadata.
-- Hugging Face configs: `tasks`, `documents`, `task_documents`, each with split `train`.
-- Raw task JSON fields: `benchmark_id`, `split`, `origin`, `reasoning_hops`, `showcase` (entity, profile, time-series variable), `task_metadata` (`frequency`, `prediction_length`, `seasonal_period`, `target_description`), `series` (`history_timestamps`, `history_values`, `future_timestamps`, `future_values`), `documents` (each with `document_id`, `content`, `role`, `subtype`, `path`), `annotations.gt_evidence` (list of `{id, evidence}` text spans), `labels_public`. The normalised Hugging Face schema may differ in field names; verify it from the data.
+- **Dev set:** 199 tasks, `origin = synthetic`, labels public (`future_values` and `gt_evidence` included). Confirmed.
+- **Hidden test set:** 80 tasks, `origin = human`, `future_values` and `gt_evidence` withheld. Filter with the `labels_public` field. These tasks still contain history, `future_timestamps`, documents and metadata. Confirmed. The audit also found, in hidden tasks only: 17 tasks whose last history timestamp equals the first future timestamp, and 13 tasks with NaN values in the history. Forecasters must handle both explicitly.
+- Hugging Face configs: `tasks`, `documents`, `task_documents`, each with split `train`, served as one `train.jsonl` file per config.
+- **Released schema (flat, three tables joined on `document_id`; the nested layout described in an earlier draft of this file does not exist in the release):**
+  - `tasks`: `benchmark_id`, `split`, `origin`, `labels_public`, `reasoning_hops`, `entity_name`, `entity_type`, `profile_id`, `profile_name`, `profile_details`, `time_series_variable`, `frequency`, `prediction_length`, `seasonal_period`, `target_description`, `history_timestamps`, `history_values`, `future_timestamps`, `future_values`, `gt_evidence`, `document_ids`, `raw_task_path`.
+  - `documents`: `document_id`, `text`, `roles`, `subtypes`, `task_ids`, `raw_document_path`. Every document carries exactly one role.
+  - `task_documents`: `benchmark_id`, `document_id`, `rank`, `role`, `subtype`, `raw_document_path`.
+  - Quirk: `seasonal_period` is a string in 165 tasks (for example `"1h"`) and an integer in 114. The loader stores it as `str | int | None`; U0.4 must resolve it to a step count in one shared place for the seasonal-naive forecaster and the A2 scaling.
 - The original CiK context fields (`background`, `instruction`, `constraints`, `full_text`) are intentionally excluded from the release.
 - Leaderboard: outputs on the 80 hidden tasks are submitted by pull request and scored by the maintainers with a private scorer. Forecast submissions need at least 100 sample trajectories per task. Stated forecast metrics: scaled MAE, scaled RMSE, scaled CRPS, winsorised at 5.0 per task, then mean ± standard error over tasks. Stated DR metrics: evidence recall, supporting-document recall, distractor avoidance.
 
 **Not released:** the agent harness, the scorer, the forecaster prompt template, and the exact definition of the scaling used in the "scaled" metrics. These have to be rebuilt. This file covers the part needed for U0 and U1.
 
-Hypothesis to test in U0.2 (nothing has been inspected yet): the `task_documents` config may carry a `rank` or similar ordering field that is not shuffled, so stored document order may reveal role. Until tested, any code that presents documents in stored order must shuffle first.
+**Confirmed in U0.2, more strongly than expected:** sorting `task_documents` by `rank` places every supporting document before every distractor in all 279 tasks, and within the distractor block the subtypes follow a fixed order (`confounder`, `noisy`, `timeseries`, `profile`, `temporal`, repeated). Stored order therefore reveals both role and subtype. Any code that renders documents into a prompt must shuffle with a recorded seed first (Decision G).
 
 ### 1.3 A concrete task, for orientation
 
-The figures in this paragraph are unverified priors, not measurements made by this project; U0.2 recomputes them from the sample file and corrects this paragraph if they differ.
+Figures recomputed from the loaded data in U0.2.
 
-`task_42` in `sample/tasks/` of the Dr-CiK GitHub repo: daily sales volume of a fictional store, 156 history points, 100-step horizon, 38 documents (13 supporting, 25 distractors). The ground-truth evidence says a software bug inflated recorded sales during 2025-10-12 to 2025-11-03 and will not recur, and that a sales event from 2025-12-21 to 2026-01-28 raised sales slightly before a return to normal. In the data the bug window averages about 834 units per day against about 444 for the rest of the history; the true future averages about 465. A forecaster without context cannot know the 834 level was an artefact.
+`task_42` in `sample/tasks/` of the Dr-CiK GitHub repo: daily sales volume of a fictional store, 156 history points, 100-step horizon, 38 documents (13 supporting, 25 distractors). The ground-truth evidence says a software bug inflated recorded sales during 2025-10-12 to 2025-11-03 and will not recur, and that a sales event from 2025-12-21 to 2026-01-28 raised sales slightly before a return to normal. In the data the bug window averages about 834 units per day against about 438 for the rest of the history; the true future averages about 465. A forecaster without context cannot know the 834 level was an artefact.
 
 ---
 
@@ -147,7 +151,7 @@ The placebo check is motivated by Sridhar et al. (arXiv:2608.22321), who found t
 
 | Device | Role | State |
 |---|---|---|
-| Personal PC: Windows 11 Pro, PowerShell | Plan authoring, repository scaffold, zero-cost work, reading previews. Never holds provider keys. | `uv`, `git` and the Python launcher are on PATH. Workspace root `C:\Users\pazer\Desktop\RU\m_th_code_2nd\` contains only `plan_a.md` and `plan_a_follow_up.txt`. No repository, environment or data exists. |
+| Personal PC: Windows 11 Pro, PowerShell | Plan authoring, repository scaffold, zero-cost work, reading previews. Never holds provider keys. | `uv`, `git` and the Python launcher are on PATH. Workspace root `C:\Users\pazer\Desktop\RU\m_th_code_2nd\` is the git repository; U0.1 to U0.3 were run here. |
 | Company MacBook: macOS, zsh | Most of the implementation and every paid LLM call. | Not set up. Unknown until the first session there: allowed git remotes, proxy, whether Hugging Face downloads work, approved LLM providers (Decisions K, L, C). |
 
 An older folder `C:\Users\pazer\Desktop\RU\master_thesis_code_efforts\` exists beside the workspace, with clones of `Dr-CiK` and `context-is-key-forecasting` and other material from an earlier attempt. It is **not** part of this project: no code, config or document here may read from it or refer to it. The two external repositories are cloned fresh into this workspace (5.3) and pinned to commits recorded in `configs/external_revisions.md`.
@@ -172,7 +176,7 @@ The repository root is `m_th_code_2nd` itself (git-initialised in U0.1). The rep
 
 ```
 m_th_code_2nd/                git root
-  plan_a.md, plan_a_follow_up.txt
+  plan_a.md, plan_a_follow_up.md
   pyproject.toml  uv.lock  .python-version  .gitattributes  .editorconfig  .gitignore  .env.example
   configs/            u0.yaml, u1.yaml, decisions.md, external_revisions.md
     machines/         windows-pc.yaml, macbook.yaml

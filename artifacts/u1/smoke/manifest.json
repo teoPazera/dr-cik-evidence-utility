@@ -1,0 +1,17 @@
+{
+  "code_commit": "54687303ac3a39470eee238a281e617197a3bff6",
+  "condition_ids": [
+    "C0",
+    "C1"
+  ],
+  "config_hash": "261859e5b7306fd6",
+  "dataset_revision": "00fbe820ff7a221e4aca71883219ef27f8223050",
+  "finished_at": "2026-09-18T16:49:34.719625+00:00",
+  "forecaster_names": [
+    "llm_direct"
+  ],
+  "machine": "windows-pc",
+  "n_cells": 1,
+  "run_id": "2026-09-18T16-46-10",
+  "started_at": "2026-09-18T16:46:10.815536+00:00"
+}

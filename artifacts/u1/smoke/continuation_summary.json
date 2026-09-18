@@ -1,0 +1,33 @@
+{
+  "generated_at": "2026-09-18T17:11:20.277178+00:00",
+  "summaries": [
+    {
+      "condition": "C0",
+      "requested": 24,
+      "valid": 24,
+      "cost_usd": 0.1494585,
+      "tokens": {
+        "input": 171720,
+        "output": 71019,
+        "total": 242739,
+        "cached_input": 170856
+      },
+      "notes": [],
+      "attempts": 24
+    },
+    {
+      "condition": "C1",
+      "requested": 25,
+      "valid": 25,
+      "cost_usd": 0.16001274999999998,
+      "tokens": {
+        "input": 184375,
+        "output": 75946,
+        "total": 260321,
+        "cached_input": 183475
+      },
+      "notes": [],
+      "attempts": 25
+    }
+  ]
+}

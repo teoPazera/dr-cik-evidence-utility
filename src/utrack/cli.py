@@ -233,7 +233,7 @@ def report_baseline_cmd() -> None:
         raise click.ClickException(f"{BASELINE_SCORES} not found; run `utrack score baseline` first")
     df = pd.read_parquet(scores_path)
     baseline_mod.write_baseline_report(
-        df, REPO_ROOT / BASELINE_REPORT, paper_note=baseline_mod.PAPER_COMPARISON_NOTE
+        df, REPO_ROOT / BASELINE_REPORT, paper_reference=baseline_mod.PAPER_REFERENCE
     )
     click.echo(f"wrote {BASELINE_REPORT}")
 

@@ -170,6 +170,38 @@ def test_write_scores_and_report_roundtrip(tmp_path) -> None:
     assert "task_4" in text  # the constant-future task is listed as degenerate for a1
 
 
+def test_paper_comparison_section_is_computed_from_scores(tmp_path) -> None:
+    store_path = tmp_path / "cells.jsonl"
+    baseline_mod.run_baseline(
+        tmp_path, _dataset(), _config(), "windows-pc", store_path, tmp_path / "manifest.json"
+    )
+    df = baseline_mod.score_baseline(_dataset(), ForecastStore(store_path), _config())
+
+    ref = {
+        "source": "test source",
+        "task_set": "test set",
+        "scaled_mae": (0.8, 1.0),
+        "scaled_rmse": (0.9, 1.0),
+        "scaled_crps": (0.5, 0.7),
+    }
+    lines = baseline_mod._paper_comparison_lines(df, ref)
+    text = "\n".join(lines)
+    assert "paper, Naive (no context)" in text
+    for key in ("a1", "a2", "a3"):
+        assert f"ours, last_value_naive, {key}" in text
+
+    # the CRPS-vs-paper ratio in the a3 row must equal our computed mean / the paper value
+    naive = df[df["forecaster_name"] == "last_value_naive"]
+    expected_ratio = naive["scaled_crps_a3"].mean() / 0.5
+    a3_row = next(line for line in lines if "ours, last_value_naive, a3" in line)
+    assert f"{expected_ratio:.2f}x" in a3_row
+
+    # no reference -> no section
+    out = tmp_path / "r.md"
+    baseline_mod.write_baseline_report(df, out)
+    assert "paper comparison" not in out.read_text(encoding="utf-8").lower()
+
+
 def test_score_baseline_records_season_length_and_fallback(tmp_path) -> None:
     store_path = tmp_path / "cells.jsonl"
     baseline_mod.run_baseline(

@@ -20,7 +20,7 @@ from utrack.data.loader import Dataset, fill_history_forward
 from utrack.forecasters.base import Forecaster, resolve_seasonal_period_steps
 from utrack.forecasters.naive import LastValueNaiveForecaster
 from utrack.forecasters.seasonal_naive import SeasonalNaiveForecaster
-from utrack.scoring.aggregate import aggregate_over_tasks, winsorise
+from utrack.scoring.aggregate import WINSOR_CAP, aggregate_over_tasks, winsorise
 from utrack.scoring.crps import mae_of_median, mean_crps, rmse_of_mean
 from utrack.scoring.scaling import (
     scale_a1_future_range,
@@ -38,14 +38,20 @@ FORECASTERS: dict[str, Forecaster] = {
 }
 SCALINGS = ("a1", "a2", "a3")
 
-PAPER_COMPARISON_NOTE = (
-    "plan_a.md U0.4 asks to quote the Dr-CiK paper's no-context naive score next to these numbers "
-    "*if the paper states one*. Checked on 2026-09-18 (arXiv:2605.27904): the abstract gives no such "
-    "number, and an automated read of the full-text PDF found none stated either. Caveat: that read "
-    "was machine extraction, so a number inside a figure or an image-rendered table could have been "
-    "missed; a human check of the paper's results tables would settle it. Nothing here was tuned "
-    "toward any external figure."
-)
+PAPER_REFERENCE = {
+    "source": (
+        "Dr-CiK paper (arXiv:2605.27904), forecaster-comparison table, 'No Context' block, row 'Naive'. "
+        "Transcribed by hand from a screenshot Teo supplied on 2026-09-18; the screenshot does not show "
+        "the table number (its caption refers to Tables 6 and 7). An earlier automated read of the PDF "
+        "missed this table."
+    ),
+    "task_set": "240-task ACCEPTED-V2 benchmark (an earlier release than the 279-task public one)",
+    # (mean, printed +/- value). The +/- is far too large to be a standard error over ~240
+    # tasks (e.g. 0.679 on 0.515), so it is probably a standard deviation; unverified.
+    "scaled_mae": (0.793, 1.045),
+    "scaled_rmse": (0.941, 1.075),
+    "scaled_crps": (0.515, 0.679),
+}
 
 
 def _dev_task_ids(dataset: Dataset) -> list[str]:
@@ -188,7 +194,61 @@ def _rank_agreement(df_forecaster: pd.DataFrame) -> dict[str, float]:
     return out
 
 
-def write_baseline_report(df: pd.DataFrame, out_path: Path, paper_note: str | None = None) -> None:
+def _paper_comparison_lines(df: pd.DataFrame, ref: dict) -> list[str]:
+    """Our last_value_naive next to the paper's no-context Naive. MAE and RMSE are winsorised at
+    5.0 here to follow the leaderboard rule (SUBMISSION.md); the scores parquet keeps them raw."""
+    naive = df[df["forecaster_name"] == "last_value_naive"]
+    paper_crps = ref["scaled_crps"][0]
+
+    def cell(col: str, winsorise_at: float | None) -> tuple[float, float]:
+        values = naive[col].dropna()
+        if winsorise_at is not None:
+            values = values.clip(upper=winsorise_at)
+        agg = aggregate_over_tasks(values.tolist())
+        return agg.mean, agg.stderr
+
+    out = ["## 6. Dr-CiK paper comparison", ""]
+    out.append(f"Reference: {ref['source']}")
+    out.append("")
+    out.append(
+        "| | task set | scaled MAE | scaled RMSE | scaled CRPS | CRPS vs paper |"
+    )
+    out.append("|---|---|---|---|---|---|")
+    out.append(
+        f"| paper, Naive (no context) | {ref['task_set']} | "
+        f"{ref['scaled_mae'][0]:.3f} (± {ref['scaled_mae'][1]:.3f}) | "
+        f"{ref['scaled_rmse'][0]:.3f} (± {ref['scaled_rmse'][1]:.3f}) | "
+        f"{ref['scaled_crps'][0]:.3f} (± {ref['scaled_crps'][1]:.3f}) | 1.00x |"
+    )
+    ratios = {}
+    for key in SCALINGS:
+        mae, mae_se = cell(f"scaled_mae_{key}", WINSOR_CAP)
+        rmse, rmse_se = cell(f"scaled_rmse_{key}", WINSOR_CAP)
+        crps, crps_se = cell(f"scaled_crps_{key}", None)
+        ratios[key] = crps / paper_crps
+        out.append(
+            f"| ours, last_value_naive, {key} | {len(naive)} synthetic dev tasks | "
+            f"{mae:.3f} (SE {mae_se:.3f}) | {rmse:.3f} (SE {rmse_se:.3f}) | "
+            f"{crps:.3f} (SE {crps_se:.3f}) | {ratios[key]:.2f}x |"
+        )
+    out.append("")
+    out.append(
+        f"By magnitude, scaled CRPS under A1 ({ratios['a1']:.2f}x) and A3 ({ratios['a3']:.2f}x) is close "
+        f"to the paper's Naive value, while A2 is {ratios['a2']:.1f}x it. That is weak, magnitude-only "
+        "evidence that the paper's scaling is not A2-like; it cannot separate A1 from A3, and the paper's "
+        "scaling definition is not released."
+    )
+    out.append("")
+    out.append("Caveats: (1) different task sets - ours is the 199 synthetic dev tasks only, the paper's is the "
+               "240-task release, whose synthetic/human mix is not known here. (2) The paper's +/- is printed "
+               "as such and looks like a standard deviation; ours are standard errors, so they are not "
+               "comparable. (3) The paper's Naive may differ in how it draws samples. Nothing here was tuned "
+               "toward the paper's figures.")
+    out.append("")
+    return out
+
+
+def write_baseline_report(df: pd.DataFrame, out_path: Path, paper_reference: dict | None = None) -> None:
     lines: list[str] = []
     lines.append("# U0.4 baseline report")
     lines.append("")
@@ -317,11 +377,8 @@ def write_baseline_report(df: pd.DataFrame, out_path: Path, paper_note: str | No
             )
             lines.append("")
 
-    if paper_note:
-        lines.append("## 6. Dr-CiK paper comparison")
-        lines.append("")
-        lines.append(paper_note)
-        lines.append("")
+    if paper_reference:
+        lines.extend(_paper_comparison_lines(df, paper_reference))
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text("\n".join(lines) + "\n", encoding="utf-8")

@@ -61,5 +61,16 @@ Spearman correlation between each scaled CRPS and the forecast horizon. The scal
 
 ## 6. Dr-CiK paper comparison
 
-plan_a.md U0.4 asks to quote the Dr-CiK paper's no-context naive score next to these numbers *if the paper states one*. Checked on 2026-09-18 (arXiv:2605.27904): the abstract gives no such number, and an automated read of the full-text PDF found none stated either. Caveat: that read was machine extraction, so a number inside a figure or an image-rendered table could have been missed; a human check of the paper's results tables would settle it. Nothing here was tuned toward any external figure.
+Reference: Dr-CiK paper (arXiv:2605.27904), forecaster-comparison table, 'No Context' block, row 'Naive'. Transcribed by hand from a screenshot Teo supplied on 2026-09-18; the screenshot does not show the table number (its caption refers to Tables 6 and 7). An earlier automated read of the PDF missed this table.
+
+| | task set | scaled MAE | scaled RMSE | scaled CRPS | CRPS vs paper |
+|---|---|---|---|---|---|
+| paper, Naive (no context) | 240-task ACCEPTED-V2 benchmark (an earlier release than the 279-task public one) | 0.793 (± 1.045) | 0.941 (± 1.075) | 0.515 (± 0.679) | 1.00x |
+| ours, last_value_naive, a1 | 199 synthetic dev tasks | 0.452 (SE 0.038) | 0.532 (SE 0.038) | 0.466 (SE 0.042) | 0.90x |
+| ours, last_value_naive, a2 | 199 synthetic dev tasks | 3.303 (SE 0.113) | 3.631 (SE 0.108) | 3.352 (SE 0.099) | 6.51x |
+| ours, last_value_naive, a3 | 199 synthetic dev tasks | 0.498 (SE 0.028) | 0.694 (SE 0.042) | 0.490 (SE 0.025) | 0.95x |
+
+By magnitude, scaled CRPS under A1 (0.90x) and A3 (0.95x) is close to the paper's Naive value, while A2 is 6.5x it. That is weak, magnitude-only evidence that the paper's scaling is not A2-like; it cannot separate A1 from A3, and the paper's scaling definition is not released.
+
+Caveats: (1) different task sets - ours is the 199 synthetic dev tasks only, the paper's is the 240-task release, whose synthetic/human mix is not known here. (2) The paper's +/- is printed as such and looks like a standard deviation; ours are standard errors, so they are not comparable. (3) The paper's Naive may differ in how it draws samples. Nothing here was tuned toward the paper's figures.
 

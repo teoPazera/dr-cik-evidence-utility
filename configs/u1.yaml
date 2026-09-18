@@ -1,4 +1,23 @@
 # Stage U1 configuration.
-# Not started. Populated once Decisions C, D, E and I are resolved (configs/decisions.md)
-# and the U0 gate has passed (plan_a.md section 7, GATE U0).
+# No development or paid run has started. Remaining preconditions in
+# plan_a.md U1.0 must be satisfied before implementation/execution.
 status: not_started
+provider: litellm
+api_style: openai-compatible
+model: gemini-3.1-flash-lite
+pricing_usd_per_million_tokens:
+  input: 0.25
+  output: 1.50
+cost_cap_usd: 5.0
+n_retries: 3
+max_output_tokens: 8000
+sampling:
+  temperature: 1.0
+  samples_per_cell: 25
+  repeats: 2
+  candidates_per_request: 1
+provider_prompt_cache:
+  enabled: true
+  type: ephemeral
+response_cache:
+  enabled: false

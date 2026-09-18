@@ -335,7 +335,9 @@ Do:
 - Implement the adapter behind the common forecaster interface, using the approved prompt template. Reference for parsing and retry behaviour: CiK `direct_prompt.py` (temperature 1.0, retries on invalid output).
 - Validate each returned trajectory: correct length, all values finite, timestamps matching `future_timestamps` when the format includes them.
 - Record requested and valid sample counts per cell. Retry up to a configured limit. A cell that ends with fewer valid samples than requested is marked incomplete and reported; its samples are kept.
-- Maintain a cost ledger updated after every request. Abort the run when the ledger reaches the cap.
+- Maintain a cost ledger updated after every request. Abort before sending a request whose conservative estimated cost could take the ledger beyond the cap.
+- For the selected LiteLLM route, request one trajectory per API call: `n > 1` was tested on 2026-09-18 and rejected by Gemini. The nominal full run is therefore 1,000 API requests plus retries.
+- Use Gemini provider-side prompt caching by marking one continuous, byte-identical static prompt block with `cache_control: {"type": "ephemeral"}`. Do not enable LiteLLM response or semantic caching, because replayed completions would invalidate independent forecast samples. Record cached tokens and LiteLLM's per-request cost headers. Implementation details and verified behavior are in `docs/u1_litellm_gemini.md`.
 
 CHECK: adapter passes tests against a mocked client. **STOP.**
 

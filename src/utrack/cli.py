@@ -23,6 +23,7 @@ from utrack.data import snapshot as snapshot_mod
 from utrack.reports import baseline as baseline_mod
 from utrack.reports import cost_estimate as cost_mod
 from utrack.reports import leakage as leakage_mod
+from utrack.reports import u1_smoke as u1_smoke_mod
 from utrack.store.forecast_store import ForecastStore
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -279,6 +280,61 @@ def conditions_leakage() -> None:
         raise SystemExit(1)
 
 
+U1_PROMPTS = Path("artifacts") / "u1" / "prompt_preview"
+
+
+@main.group()
+def prompts() -> None:
+    """Render exact U1 LiteLLM request payloads for review. Nothing is sent."""
+
+
+@prompts.command("u1")
+@click.option("--task", "task_ids", multiple=True, help="Benchmark id to render; defaults to all selected U1 tasks.")
+@click.option("--condition", "condition_ids", multiple=True, help="Condition id to render; defaults to enabled U1 conditions.")
+def prompts_u1(task_ids: tuple[str, ...], condition_ids: tuple[str, ...]) -> None:
+    """Write exact Gemini/LiteLLM JSON payloads for Teo to inspect before paid calls."""
+    from utrack.conditions.builders import build_condition
+    from utrack.forecasters.llm_direct import LiteLLMDirectForecaster
+    from utrack.forecasters.llm_prompt import TEMPLATE_VERSION, render_user_prompt
+
+    cfg = _u0_config()
+    dataset = loader_mod.load_dataset(REPO_ROOT, cfg["dataset"])
+    selection = json.loads((REPO_ROOT / U1_TASKS).read_text(encoding="utf-8"))
+    selected_task_ids = list(task_ids) or [row["benchmark_id"] for row in selection["tasks"]]
+    selected_condition_ids = list(condition_ids) or _active_condition_ids(cfg)
+    for task_id in selected_task_ids:
+        if task_id not in dataset.tasks:
+            raise click.ClickException(f"unknown task: {task_id}")
+        forecast_input = dataset.forecast_input(task_id)
+        for condition_id in selected_condition_ids:
+            condition = build_condition(condition_id, dataset, task_id, cfg["conditions"]["seed"])
+            prompt = render_user_prompt(forecast_input, condition.context)
+            payload = {
+                "model": "gemini-3.1-flash-lite",
+                "messages": LiteLLMDirectForecaster._messages(prompt),
+                "temperature": 1.0,
+                "max_tokens": int(_load_yaml(REPO_ROOT / "configs" / "u1.yaml")["max_output_tokens"]),
+            }
+            body = {
+                "purpose": "review-only exact LiteLLM /chat/completions payload; no request was sent",
+                "task": task_id,
+                "condition": condition_id,
+                "template_version": TEMPLATE_VERSION,
+                "condition_metadata": {
+                    "document_ids": list(condition.document_ids),
+                    "evidence_span_ids": list(condition.evidence_span_ids),
+                    "source_benchmark_id": condition.source_benchmark_id,
+                    "seed": condition.seed,
+                    "render_version": condition.render_version,
+                },
+                "payload": payload,
+            }
+            path = REPO_ROOT / U1_PROMPTS / task_id / f"{condition_id}.json"
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps(body, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+            click.echo(f"wrote {path.relative_to(REPO_ROOT)}")
+
+
 COST_ESTIMATE = Path("artifacts") / "u0" / "u1_cost_estimate.md"
 
 
@@ -320,6 +376,25 @@ def run() -> None:
     """Run forecasters and write raw trajectories to the forecast store."""
 
 
+U1_SMOKE_STORE = Path("artifacts") / "u1" / "smoke" / "cells.jsonl"
+U1_SMOKE_MANIFEST = Path("artifacts") / "u1" / "smoke" / "manifest.json"
+U1_SMOKE_SCORES = Path("artifacts") / "u1" / "smoke" / "scores.parquet"
+U1_SMOKE_REPORT = Path("artifacts") / "u1" / "smoke" / "report.md"
+
+
+@run.command("u1-smoke")
+def run_u1_smoke_cmd() -> None:
+    """Paid U1.2-style smoke: task_42, C0/C1, one repeat, 25 samples each."""
+    if U1_SMOKE_STORE.exists():
+        raise click.ClickException(f"{U1_SMOKE_STORE} already exists; smoke stores are append-only.")
+    cfg = _u0_config()
+    u1_cfg = _load_yaml(REPO_ROOT / "configs" / "u1.yaml")
+    dataset = loader_mod.load_dataset(REPO_ROOT, cfg["dataset"])
+    manifest = u1_smoke_mod.run_smoke(REPO_ROOT, dataset, cfg, u1_cfg, _machine_name(), REPO_ROOT / U1_SMOKE_STORE, REPO_ROOT / U1_SMOKE_MANIFEST)
+    click.echo(f"wrote {manifest.n_cells} smoke cells to {U1_SMOKE_STORE}")
+    click.echo(f"wrote {U1_SMOKE_MANIFEST}")
+
+
 @run.command("baseline")
 def run_baseline_cmd() -> None:
     """U0.4: zero-cost statistical forecasters, condition C0, all dev tasks."""
@@ -343,6 +418,21 @@ def score() -> None:
     """Score stored forecasts (pure function of the store; free to rerun)."""
 
 
+@score.command("u1-smoke")
+def score_u1_smoke_cmd() -> None:
+    """Score the task_42 U1 smoke store. No provider requests are made."""
+    if not U1_SMOKE_STORE.exists():
+        raise click.ClickException(f"{U1_SMOKE_STORE} not found; run `utrack run u1-smoke` first")
+    cfg = _u0_config()
+    dataset = loader_mod.load_dataset(REPO_ROOT, cfg["dataset"])
+    df = u1_smoke_mod.score_smoke(REPO_ROOT, dataset, cfg, REPO_ROOT / U1_SMOKE_STORE)
+    if df.empty:
+        raise click.ClickException("no scoreable smoke cells (need at least two valid trajectories)")
+    U1_SMOKE_SCORES.parent.mkdir(parents=True, exist_ok=True)
+    df.to_parquet(REPO_ROOT / U1_SMOKE_SCORES, index=False)
+    click.echo(f"wrote {U1_SMOKE_SCORES} ({len(df)} rows)")
+
+
 @score.command("baseline")
 def score_baseline_cmd() -> None:
     """Score the U0.4 baseline store under all three scalings."""
@@ -359,6 +449,17 @@ def score_baseline_cmd() -> None:
 @main.group()
 def report() -> None:
     """Write human-readable reports from scored results."""
+
+
+@report.command("u1-smoke")
+def report_u1_smoke_cmd() -> None:
+    """Write the U1 smoke CRPS, baseline comparison, token and cache-cost report."""
+    import pandas as pd
+    if not U1_SMOKE_SCORES.exists():
+        raise click.ClickException(f"{U1_SMOKE_SCORES} not found; run `utrack score u1-smoke` first")
+    df = pd.read_parquet(REPO_ROOT / U1_SMOKE_SCORES)
+    u1_smoke_mod.write_smoke_report(df, REPO_ROOT / BASELINE_SCORES, REPO_ROOT / U1_SMOKE_REPORT)
+    click.echo(f"wrote {U1_SMOKE_REPORT}")
 
 
 @report.command("baseline")

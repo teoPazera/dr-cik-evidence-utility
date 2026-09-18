@@ -1,8 +1,9 @@
-"""Draft prompt template and request builder for the (not yet implemented) LLM forecaster path.
+"""Approved CiK Direct Prompt template and request builder for U1.
 
-DRAFT, NOT APPROVED. Decision D (prompt template) is open: this is option D1, a port of CiK's
-Direct Prompt with a slot for the rendered context. Plan_a.md D requires Teo to see and approve
-the final prompt text before any paid call, and any change gets a new `TEMPLATE_VERSION`.
+Decision D was resolved on 2026-09-18: this is D1, a port of CiK's Direct
+Prompt with a slot for the rendered condition context. The final rendered
+requests are written for Teo's review before every paid execution; any prompt
+change must receive a new `TEMPLATE_VERSION`.
 
 Ported from `cik_benchmark/baselines/direct_prompt.py` (`make_prompt` and the system message in
 `__call__`), Apache-2.0, ServiceNow, commit 73f46016f8c5643bf6799ca31875eab3e8d0d075 of
@@ -26,7 +27,7 @@ from utrack.conditions.base import Condition
 from utrack.data.loader import fill_history_forward
 from utrack.data.schema import ForecastInput
 
-TEMPLATE_VERSION = "d1-draft-v0"
+TEMPLATE_VERSION = "d1-cik-approved-v1"
 SYSTEM_MESSAGE = "You are a useful forecasting assistant."
 MAX_DIGITS = 6
 

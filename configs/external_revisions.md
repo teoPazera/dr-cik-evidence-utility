@@ -7,12 +7,12 @@ whatever commit it clones, later syncs (on either machine) check that commit out
 ## Dr-CiK
 - URL: https://github.com/ServiceNow/Dr-CiK.git
 - Commit: `4acbafe11f2e7caec792277caed606001abaf12c`
-- Synced: 2026-09-18T13:11:03.973741+00:00 on windows-pc
+- Synced: 2026-09-18T15:40:42.048143+00:00 on macbook
 
 ## context-is-key-forecasting
 - URL: https://github.com/ServiceNow/context-is-key-forecasting.git
 - Commit: `73f46016f8c5643bf6799ca31875eab3e8d0d075`
-- Synced: 2026-09-18T13:11:03.973741+00:00 on windows-pc
+- Synced: 2026-09-18T15:40:42.048143+00:00 on macbook
 
 Verified paths (Decision D, U0.3):
 - `cik_benchmark/baselines/direct_prompt.py` (def make_prompt): OK

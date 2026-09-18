@@ -31,3 +31,6 @@ dist/
 # OS
 .DS_Store
 Thumbs.db
+
+# Repository-local tool and model caches (machine-specific).
+/.cache/

@@ -1,13 +1,13 @@
 # Company MacBook: macOS, zsh (plan_a.md 5.1).
 # Most of the implementation and every paid LLM call.
-# Not set up yet: values below are placeholders until the first MacBook session
-# runs `utrack doctor` and Decisions C, I, K, L are resolved (configs/decisions.md).
+# Environment initialized on 2026-09-18. Provider and paid-run values remain
+# unset until Decisions C, I and L are resolved (configs/decisions.md).
 machine: macbook
 role: implementation-and-paid-calls
 network:
-  github: unknown # checked by `utrack doctor` at the first session (Decision L)
+  github: true # verified on this MacBook during environment setup
   huggingface: unknown # checked by `utrack doctor` at the first session (Decision L)
-llm_providers: [] # filled in once Decision C is resolved
-cost_cap_usd: null # filled in once Decision I is resolved
-cache_dir: null # null = repo-relative default
-hf_home: null # null = repo-relative default
+llm_providers: [litellm] # OpenAI-compatible company LiteLLM proxy
+cost_cap_usd: 5.0 # Decision I; hard U1 spending cap
+cache_dir: .cache/uv
+hf_home: .cache/huggingface

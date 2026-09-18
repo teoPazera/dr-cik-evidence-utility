@@ -84,7 +84,7 @@ Example:
 
 def test_prompt_matches_the_draft_template_exactly() -> None:
     """Golden text. If this fails on purpose, bump TEMPLATE_VERSION (plan_a.md Decision D)."""
-    assert TEMPLATE_VERSION == "d1-draft-v0"
+    assert TEMPLATE_VERSION == "d1-cik-approved-v1"
     assert render_user_prompt(_forecast_input(), "CTX") == EXPECTED_PROMPT
 
 

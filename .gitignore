@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.pytest_cache/
+.ruff_cache/
+build/
+dist/
+
+# Data snapshot: re-downloaded per machine, checked against the committed fingerprint (5.2.8)
+/data/*
+!/data/fingerprint.json
+
+# External repo clones: pinned via configs/external_revisions.md, not committed (5.3)
+/external/
+
+# Secrets (5.2.4)
+.env
+
+# Artifacts: only *.md, *.json and stage-named parquet <5MB are committed (5.2.8).
+# Parquet deliverables are added explicitly with `git add -f` when a stage names them.
+/artifacts/**
+!/artifacts/**/
+!/artifacts/**/*.md
+!/artifacts/**/*.json
+
+# OS
+.DS_Store
+Thumbs.db

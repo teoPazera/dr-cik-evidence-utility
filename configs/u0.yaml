@@ -1,0 +1,24 @@
+# Stage U0 configuration.
+# Dataset revision is pinned so every run records the same bytes (plan_a.md 3.1, Snapshot contract).
+# Verified against the Hugging Face API in U0.1 (public, non-gated dataset).
+dataset:
+  repo_id: ServiceNow/Dr-CiK
+  repo_type: dataset
+  revision: 00fbe820ff7a221e4aca71883219ef27f8223050
+  # Paths are relative to the HF repo root AND to the local `data/` directory
+  # (the snapshot mirrors the repo's own data/ layout, see data/snapshot.py).
+  configs:
+    tasks: data/tasks/train.jsonl
+    documents: data/documents/train.jsonl
+    task_documents: data/task_documents/train.jsonl
+
+# Counts stated in plan_a.md 1.2 / the U0.1 CHECK, confirmed against the dataset's own
+# data/summary.json and benchmark_manifest.json before download (2026-09-18).
+expected_counts:
+  tasks: 279
+  labels_public_true: 199
+  labels_public_false: 80
+  documents: 10342
+  documents_by_role:
+    supporting: 3367
+    distractor: 6975

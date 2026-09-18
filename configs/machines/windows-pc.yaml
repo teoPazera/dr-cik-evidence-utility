@@ -1,0 +1,11 @@
+# Personal PC: Windows 11 Pro, PowerShell (plan_a.md 5.1).
+# Plan authoring, repo scaffold, zero-cost work. Never holds provider keys.
+machine: windows-pc
+role: plan-authoring-and-zero-cost-work
+network:
+  github: true
+  huggingface: true
+llm_providers: []
+cost_cap_usd: 0.0
+cache_dir: null # null = repo-relative default
+hf_home: null # null = repo-relative default, unused while data/snapshot.py downloads over plain HTTP

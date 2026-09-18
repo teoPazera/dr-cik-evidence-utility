@@ -1,0 +1,23 @@
+{
+  "downloaded_at": "2026-09-18T13:11:20.957499+00:00",
+  "files": {
+    "data/documents/train.jsonl": {
+      "bytes": 24581962,
+      "config": "documents",
+      "sha256": "c6ef369b7add313d009e9e1539b31708923abebe13a87da877d629155d44ea06"
+    },
+    "data/task_documents/train.jsonl": {
+      "bytes": 1646872,
+      "config": "task_documents",
+      "sha256": "2f251f8124c3b0c8a3d24348264db8767ec699eb1c6d33618e8a9c7b6adc4e48"
+    },
+    "data/tasks/train.jsonl": {
+      "bytes": 5620240,
+      "config": "tasks",
+      "sha256": "deb965ffba9fd5ddd46f8216be993ad1b6991ba7a0203b62385cf850389369f3"
+    }
+  },
+  "machine": "windows-pc",
+  "repo_id": "ServiceNow/Dr-CiK",
+  "revision": "00fbe820ff7a221e4aca71883219ef27f8223050"
+}

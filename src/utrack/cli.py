@@ -14,7 +14,9 @@ import click
 import yaml
 from dotenv import load_dotenv
 
+from utrack.data import audit as audit_mod
 from utrack.data import external as external_mod
+from utrack.data import loader as loader_mod
 from utrack.data import snapshot as snapshot_mod
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -116,6 +118,42 @@ def data_verify() -> None:
             click.echo(f"MISMATCH: {p}")
         raise SystemExit(1)
     click.echo("data/fingerprint.json matches the local snapshot.")
+
+
+@data.command("audit")
+def data_audit_cmd() -> None:
+    """Load the snapshot, validate invariants, and write task_index.parquet + data_audit.md."""
+    cfg = _u0_config()
+    dataset = loader_mod.load_dataset(REPO_ROOT, cfg["dataset"])
+
+    raw_field_names = {
+        name: sorted({k for r in loader_mod.load_jsonl(REPO_ROOT / path) for k in r.keys()})
+        for name, path in cfg["dataset"]["configs"].items()
+    }
+
+    violations = audit_mod.validate_invariants(dataset)
+    rank_finding = audit_mod.rank_reveals_role(dataset)
+    index_df = audit_mod.compute_index(dataset)
+
+    index_path = REPO_ROOT / "artifacts" / "u0" / "task_index.parquet"
+    audit_mod.write_task_index(index_df, index_path)
+
+    audit_path = REPO_ROOT / "artifacts" / "u0" / "data_audit.md"
+    audit_mod.write_data_audit(
+        dataset=dataset,
+        raw_field_names=raw_field_names,
+        violations=violations,
+        rank_finding=rank_finding,
+        index_df=index_df,
+        out_path=audit_path,
+    )
+
+    total_violations = sum(len(v) for v in violations.values())
+    click.echo(f"wrote {index_path.relative_to(REPO_ROOT)} ({len(index_df)} rows)")
+    click.echo(
+        f"wrote {audit_path.relative_to(REPO_ROOT)} "
+        f"({total_violations} invariant violations across {len(violations)} checks)"
+    )
 
 
 @main.group()

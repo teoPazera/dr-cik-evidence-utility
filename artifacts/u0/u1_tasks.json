@@ -1,0 +1,92 @@
+{
+  "condition_ids": [
+    "C0",
+    "C1",
+    "C2",
+    "C3"
+  ],
+  "conditions_seed": 20260918,
+  "dataset_revision": "00fbe820ff7a221e4aca71883219ef27f8223050",
+  "decision": "F",
+  "fixed_tasks": [
+    "task_42",
+    "task_163",
+    "task_201"
+  ],
+  "n_extra": 2,
+  "rule": "Fixed: the repository sample tasks. Then, n_extra times: among dev tasks not yet selected whose frequency and prediction_length are both absent from the tasks selected so far, draw one with numpy default_rng(sha256-derived seed of (seed, 'u1-task-selection', step)) over the natural-id-sorted candidates.",
+  "selection_seed": 20260918,
+  "status": "default rule applied; Decision F is not yet resolved by Teo (configs/decisions.md)",
+  "tasks": [
+    {
+      "approx_tokens_all_documents": 19014,
+      "benchmark_id": "task_42",
+      "evidence_spans": 5,
+      "frequency": "1 day",
+      "history_length": 156,
+      "n_eligible": null,
+      "origin": "synthetic",
+      "placebo_source": "task_87",
+      "prediction_length": 100,
+      "source": "repository_sample",
+      "step": null,
+      "supporting_documents": 13
+    },
+    {
+      "approx_tokens_all_documents": 22428,
+      "benchmark_id": "task_163",
+      "evidence_spans": 3,
+      "frequency": "1 hour",
+      "history_length": 48,
+      "n_eligible": null,
+      "origin": "synthetic",
+      "placebo_source": "task_44",
+      "prediction_length": 24,
+      "source": "repository_sample",
+      "step": null,
+      "supporting_documents": 12
+    },
+    {
+      "approx_tokens_all_documents": 18247,
+      "benchmark_id": "task_201",
+      "evidence_spans": 5,
+      "frequency": "5 minutes",
+      "history_length": 166,
+      "n_eligible": null,
+      "origin": "synthetic",
+      "placebo_source": "task_101",
+      "prediction_length": 90,
+      "source": "repository_sample",
+      "step": null,
+      "supporting_documents": 15
+    },
+    {
+      "approx_tokens_all_documents": 17477,
+      "benchmark_id": "task_51",
+      "evidence_spans": 5,
+      "frequency": "1 minute",
+      "history_length": 266,
+      "n_eligible": 16,
+      "origin": "synthetic",
+      "placebo_source": "task_187",
+      "prediction_length": 120,
+      "source": "seeded_pick",
+      "step": 0,
+      "supporting_documents": 12
+    },
+    {
+      "approx_tokens_all_documents": 15015,
+      "benchmark_id": "task_43",
+      "evidence_spans": 4,
+      "frequency": "1 second",
+      "history_length": 206,
+      "n_eligible": 3,
+      "origin": "synthetic",
+      "placebo_source": "task_58",
+      "prediction_length": 50,
+      "source": "seeded_pick",
+      "step": 1,
+      "supporting_documents": 11
+    }
+  ]
+}

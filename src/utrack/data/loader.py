@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
@@ -17,9 +18,18 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from utrack.data.schema import Document, ForecastInput, Task, TaskLabels
+from utrack.data.schema import Document, EvidenceSpan, ForecastInput, Task, TaskLabels
 
 logger = logging.getLogger(__name__)
+
+
+def natural_sort_key(identifier: str) -> tuple[str, int, str]:
+    """Sort key that orders ids by their trailing number: E2 < E10, task_9 < task_10.
+    Lexicographic order would not (U0.5 found one dev task whose evidence ids differ)."""
+    match = re.match(r"^(.*?)(\d+)$", identifier)
+    if not match:
+        return (identifier, -1, identifier)
+    return (match.group(1), int(match.group(2)), identifier)
 
 
 def fill_history_forward(history_values: list[float | None], benchmark_id: str = "") -> np.ndarray:
@@ -57,6 +67,15 @@ class Dataset:
 
     def forecast_input(self, benchmark_id: str) -> ForecastInput:
         return ForecastInput.from_task(self.tasks[benchmark_id])
+
+    def evidence(self, benchmark_id: str) -> tuple[EvidenceSpan, ...]:
+        """The task's evidence spans and nothing else from the label side, so a condition
+        builder can get context text without ever holding a `TaskLabels` (future values)."""
+        return tuple(self.tasks[benchmark_id].gt_evidence)
+
+    def dev_task_ids(self) -> list[str]:
+        """Tasks with public labels, in natural id order (task_2 before task_10)."""
+        return sorted((b for b, t in self.tasks.items() if t.labels_public), key=natural_sort_key)
 
     def labels(self, benchmark_id: str) -> TaskLabels:
         return TaskLabels.from_task(self.tasks[benchmark_id])

@@ -15,7 +15,6 @@ def _make_forecast_input(**overrides) -> ForecastInput:
         history_timestamps=[f"2026-01-01 {h:02d}:00:00" for h in range(24)],
         history_values=list(np.sin(np.arange(24) / 3.0) * 10 + 50),
         future_timestamps=[f"2026-01-02 {h:02d}:00:00" for h in range(10)],
-        document_ids=[],
         entity_name="e",
         entity_type="t",
         profile_id="1",

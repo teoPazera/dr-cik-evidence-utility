@@ -8,7 +8,6 @@ figures (plan_a.md U0.4: different task set, no tuning to match).
 
 from __future__ import annotations
 
-import hashlib
 import logging
 from datetime import datetime, timezone
 from pathlib import Path
@@ -21,6 +20,7 @@ from utrack.forecasters.base import Forecaster, resolve_seasonal_period_steps
 from utrack.forecasters.naive import LastValueNaiveForecaster
 from utrack.forecasters.seasonal_naive import SeasonalNaiveForecaster
 from utrack.scoring.aggregate import WINSOR_CAP, aggregate_over_tasks, winsorise
+from utrack.seeds import derive_seed
 from utrack.scoring.crps import mae_of_median, mean_crps, rmse_of_mean
 from utrack.scoring.scaling import (
     scale_a1_future_range,
@@ -62,11 +62,7 @@ def _dev_task_ids(dataset: Dataset) -> list[str]:
     return sorted((bid for bid, t in dataset.tasks.items() if t.labels_public), key=sort_key)
 
 
-def _cell_seed(base_seed: int, *parts: str) -> int:
-    """Deterministic per-cell seed from a config seed + identifying strings
-    (plan_a.md 5.2.7: seeded from config, no reliance on Python's per-process hash())."""
-    digest = hashlib.sha256("|".join((str(base_seed), *parts)).encode("utf-8")).hexdigest()
-    return int(digest[:8], 16)
+_cell_seed = derive_seed  # moved to utrack.seeds in U0.5; same algorithm, same values
 
 
 def run_baseline(

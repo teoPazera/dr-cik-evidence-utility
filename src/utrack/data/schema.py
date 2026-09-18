@@ -105,7 +105,6 @@ class ForecastInput:
     history_timestamps: list[str]
     history_values: list[float | None]
     future_timestamps: list[str]
-    document_ids: list[str]
     entity_name: str
     entity_type: str
     profile_id: str
@@ -114,6 +113,9 @@ class ForecastInput:
     time_series_variable: str
     target_description: str
     reasoning_hops: int
+
+    # No `document_ids` (removed in U0.5): the ids are sequential in stored rank order, which
+    # U0.2 showed reveals role, and documents reach a forecaster only through a Condition.
 
     @classmethod
     def from_task(cls, task: Task) -> "ForecastInput":
@@ -126,7 +128,6 @@ class ForecastInput:
             history_timestamps=task.history_timestamps,
             history_values=task.history_values,
             future_timestamps=task.future_timestamps,
-            document_ids=task.document_ids,
             entity_name=task.entity_name,
             entity_type=task.entity_type,
             profile_id=task.profile_id,

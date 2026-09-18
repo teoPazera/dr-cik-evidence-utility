@@ -14,11 +14,14 @@ import click
 import yaml
 from dotenv import load_dotenv
 
+from utrack.conditions import preview as preview_mod
+from utrack.conditions import selection as selection_mod
 from utrack.data import audit as audit_mod
 from utrack.data import external as external_mod
 from utrack.data import loader as loader_mod
 from utrack.data import snapshot as snapshot_mod
 from utrack.reports import baseline as baseline_mod
+from utrack.reports import leakage as leakage_mod
 from utrack.store.forecast_store import ForecastStore
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -175,6 +178,104 @@ def external_sync() -> None:
     """Clone/checkout Dr-CiK and context-is-key-forecasting at their pinned commits."""
     summary = external_mod.sync_all(REPO_ROOT, _machine_name())
     click.echo(json.dumps(summary, indent=2))
+
+
+U1_TASKS = Path("artifacts") / "u0" / "u1_tasks.json"
+CONDITIONS_PREVIEW = Path("artifacts") / "u0" / "conditions_preview"
+LEAKAGE_REPORT = Path("artifacts") / "u0" / "leakage_report.md"
+
+
+def _active_condition_ids(cfg: dict) -> list[str]:
+    ids = ["C0", "C1", "C2", "C3"]
+    if cfg["conditions"]["enable_c4"]:
+        ids.append("C4")
+    return ids
+
+
+@main.group()
+def conditions() -> None:
+    """Build and inspect the experimental conditions C0 to C4 (plan_a.md 3.3, U0.5)."""
+
+
+@conditions.command("select")
+def conditions_select() -> None:
+    """Select the U1 task set (Decision F default) and write artifacts/u0/u1_tasks.json."""
+    cfg = _u0_config()
+    dataset = loader_mod.load_dataset(REPO_ROOT, cfg["dataset"])
+    fixed, n_extra, seed = cfg["u1_tasks"]["fixed"], cfg["u1_tasks"]["n_extra"], cfg["u1_tasks"]["seed"]
+    selected = selection_mod.select_u1_tasks(dataset, fixed, n_extra, seed)
+    record = selection_mod.selection_record(
+        dataset,
+        selected,
+        fixed=fixed,
+        n_extra=n_extra,
+        seed=seed,
+        base_seed=cfg["conditions"]["seed"],
+        condition_ids=_active_condition_ids(cfg),
+        dataset_revision=cfg["dataset"]["revision"],
+    )
+    path = REPO_ROOT / U1_TASKS
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes((json.dumps(record, indent=2, sort_keys=True) + "\n").encode("utf-8"))
+    for row in record["tasks"]:
+        click.echo(
+            f"{row['benchmark_id']:<10} {row['source']:<18} {row['frequency']:<10} "
+            f"horizon {row['prediction_length']:<4} placebo from {row['placebo_source']}"
+        )
+    click.echo(f"wrote {U1_TASKS}")
+
+
+def _preview_files(cfg: dict, dataset: loader_mod.Dataset) -> dict[str, bytes]:
+    selection = json.loads((REPO_ROOT / U1_TASKS).read_text(encoding="utf-8"))
+    return preview_mod.render_preview_files(
+        dataset,
+        [row["benchmark_id"] for row in selection["tasks"]],
+        _active_condition_ids(cfg),
+        cfg["conditions"]["seed"],
+        cfg["dataset"]["revision"],
+    )
+
+
+@conditions.command("preview")
+def conditions_preview() -> None:
+    """Write the rendered context of every U1 cell plus a SHA-256 list."""
+    cfg = _u0_config()
+    dataset = loader_mod.load_dataset(REPO_ROOT, cfg["dataset"])
+    files = _preview_files(cfg, dataset)
+    preview_mod.write_previews(files, REPO_ROOT / CONDITIONS_PREVIEW)
+    click.echo(f"wrote {len(files) - 1} previews and {preview_mod.SHA256_FILE} under {CONDITIONS_PREVIEW}")
+
+
+@conditions.command("verify")
+def conditions_verify() -> None:
+    """Regenerate the previews in memory and compare with the committed files, byte for byte."""
+    cfg = _u0_config()
+    dataset = loader_mod.load_dataset(REPO_ROOT, cfg["dataset"])
+    problems = preview_mod.verify_previews(_preview_files(cfg, dataset), REPO_ROOT / CONDITIONS_PREVIEW)
+    if problems:
+        for p in problems:
+            click.echo(f"MISMATCH: {p}")
+        raise SystemExit(1)
+    click.echo("conditions previews reproduce byte for byte.")
+
+
+@conditions.command("leakage")
+def conditions_leakage() -> None:
+    """Scan all dev tasks and conditions for runs of future values; write the leakage report."""
+    cfg = _u0_config()
+    dataset = loader_mod.load_dataset(REPO_ROOT, cfg["dataset"])
+    min_run = cfg["conditions"]["leakage_min_run"]
+    scan = leakage_mod.scan_dev_tasks(dataset, cfg["conditions"]["seed"], min_run)
+    order = leakage_mod.order_position_summary(dataset, cfg["conditions"]["seed"])
+    leakage_mod.write_leakage_report(scan, order, min_run, REPO_ROOT / LEAKAGE_REPORT)
+    click.echo(f"wrote {LEAKAGE_REPORT}")
+
+    input_hits = scan[(scan["surface"] == "metadata") & (scan["run_length"] > 0)]
+    if input_hits.empty and not leakage_mod.label_fields_on_forecast_input():
+        click.echo("leakage test passed: the forecaster input's metadata holds no run of future values and no label field.")
+    else:
+        click.echo(f"LEAK: {sorted(input_hits['benchmark_id'])}")
+        raise SystemExit(1)
 
 
 @main.group()

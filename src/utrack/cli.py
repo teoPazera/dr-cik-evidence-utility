@@ -21,6 +21,7 @@ from utrack.data import external as external_mod
 from utrack.data import loader as loader_mod
 from utrack.data import snapshot as snapshot_mod
 from utrack.reports import baseline as baseline_mod
+from utrack.reports import cost_estimate as cost_mod
 from utrack.reports import leakage as leakage_mod
 from utrack.store.forecast_store import ForecastStore
 
@@ -275,6 +276,42 @@ def conditions_leakage() -> None:
         click.echo("leakage test passed: the forecaster input's metadata holds no run of future values and no label field.")
     else:
         click.echo(f"LEAK: {sorted(input_hits['benchmark_id'])}")
+        raise SystemExit(1)
+
+
+COST_ESTIMATE = Path("artifacts") / "u0" / "u1_cost_estimate.md"
+
+
+@main.group()
+def estimate() -> None:
+    """Dry-run estimates. Nothing is sent to any provider."""
+
+
+@estimate.command("u1")
+def estimate_u1() -> None:
+    """U0.6: build every U1 request with the draft prompt, count tokens, write u1_cost_estimate.md."""
+    cfg = _u0_config()
+    dataset = loader_mod.load_dataset(REPO_ROOT, cfg["dataset"])
+    selection = json.loads((REPO_ROOT / U1_TASKS).read_text(encoding="utf-8"))
+    cost_cfg = cfg["cost_estimate"]
+    requests = cost_mod.build_u1_requests(
+        dataset,
+        [row["benchmark_id"] for row in selection["tasks"]],
+        _active_condition_ids(cfg),
+        cost_cfg["repeats"],
+        cost_cfg["n_samples"],
+        cfg["conditions"]["seed"],
+    )
+    df = cost_mod.estimate_rows(dataset, requests, cost_cfg["token_models"])
+    leaks = cost_mod.request_leaks(dataset, requests, cfg["conditions"]["leakage_min_run"])
+    pair_matches = cost_mod.request_pair_matches(dataset, requests)
+    example = next(
+        (r for r in requests if (r.benchmark_id, r.condition_id) == cost_mod.EXAMPLE_REQUEST and r.repeat == 0), None
+    )
+    cost_mod.write_cost_estimate(df, cfg, leaks, pair_matches, example, REPO_ROOT / COST_ESTIMATE)
+    click.echo(f"built {len(requests)} requests (nothing sent); wrote {COST_ESTIMATE}")
+    if leaks:
+        click.echo(f"LEAK in request text: {leaks}")
         raise SystemExit(1)
 
 

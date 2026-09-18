@@ -47,3 +47,16 @@ u1_tasks:
   fixed: [task_42, task_163, task_201]   # the repository sample tasks
   n_extra: 2
   seed: 20260918
+
+# U0.6: dry-run cost estimate for U1 (nothing is sent). Decisions C, D, E and I are open; these
+# are the plan defaults and stand-ins, not choices.
+cost_estimate:
+  n_samples: 25          # Decision E default
+  repeats: 2             # Decision E default
+  valid_rate_floor: 0.8  # the U1.2 kill threshold; one column assumes this valid-sample rate
+  token_models:          # no tokenizer until Decision C names a model
+    low:  {chars_per_token: 4.0, digits_per_token: 4.0}   # plain characters / 4, as in the U0.2 index
+    high: {chars_per_token: 4.0, digits_per_token: 1.0}   # every digit its own token: an upper bound for numeric text
+  price_usd_per_million_tokens:   # Teo fills these in once Decision C names a model; null = not set
+    input: null
+    output: null

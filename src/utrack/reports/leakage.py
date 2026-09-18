@@ -26,12 +26,14 @@ from utrack.conditions.leakage import (
     is_untestable,
     label_fields_on_forecast_input,
     label_references_in_source,
+    matching_future_pairs,
     metadata_text,
 )
 from utrack.data.loader import Dataset
+from utrack.forecasters import llm_prompt as llm_prompt_mod
 
 SCAN_SURFACES = ("metadata", "history", "C1", "C2", "C3", "C4")  # C0 adds no text beyond the ForecastInput
-BUILDER_MODULES = (builders_mod, placebo_mod, render_mod, preview_mod)
+BUILDER_MODULES = (builders_mod, placebo_mod, render_mod, preview_mod, llm_prompt_mod)
 
 
 def scan_dev_tasks(dataset: Dataset, base_seed: int, min_run: int = DEFAULT_MIN_RUN) -> pd.DataFrame:
@@ -45,6 +47,7 @@ def scan_dev_tasks(dataset: Dataset, base_seed: int, min_run: int = DEFAULT_MIN_
         untestable = is_untestable(future, min_run)
         for surface, text in texts.items():
             hit = None if untestable else find_future_run(text, future, min_run)
+            at_future, exact, exact_nonzero = matching_future_pairs(text, forecast_input.future_timestamps, future)
             rows.append(
                 {
                     "benchmark_id": benchmark_id,
@@ -52,6 +55,9 @@ def scan_dev_tasks(dataset: Dataset, base_seed: int, min_run: int = DEFAULT_MIN_
                     "untestable": untestable,
                     "run_length": hit.run_length if hit else 0,
                     "future_start": hit.future_start if hit else -1,
+                    "pairs_at_future_ts": at_future,
+                    "exact_pairs": exact,
+                    "exact_nonzero_pairs": exact_nonzero,
                     "horizon": len(future),
                 }
             )
@@ -76,6 +82,42 @@ def order_position_summary(dataset: Dataset, base_seed: int) -> dict[str, tuple[
         return float(np.mean(values)), float(np.std(values, ddof=1) / math.sqrt(len(values)))
 
     return {"stored rank order": mean_se(stored), "C4 rendered order": mean_se(rendered)}
+
+
+def _pair_section(scan: pd.DataFrame) -> list[str]:
+    lines = [
+        "",
+        "### Exact future values given at scattered timestamps",
+        "",
+        "The run scan needs consecutive values, so it cannot see a text that hands over the true value at some "
+        "future timestamps, for example one every third hour. This check reads every `(timestamp, value)` pair "
+        "in a text and compares those at a future timestamp with the true value there. It is the benchmark's "
+        "intended context (plan_a.md U0.5), so it is reported, not asserted; it matters when reading utility, "
+        "because on these tasks the evidence condition is handed part of the answer.",
+        "",
+        "| surface | tasks with a pair at a future timestamp | tasks with an exact match | most steps matched (share of horizon) |",
+        "|---|---|---|---|",
+    ]
+    for surface in SCAN_SURFACES:
+        part = scan[scan["surface"] == surface]
+        matched = part[part["exact_pairs"] > 0]
+        share = f"{(matched['exact_pairs'] / matched['horizon']).max():.0%}" if len(matched) else "-"
+        lines.append(f"| {surface} | {int((part['pairs_at_future_ts'] > 0).sum())} | {len(matched)} | {share} |")
+    matched = scan[(scan["exact_pairs"] > 0) & (scan["surface"] != "history")].sort_values(["surface", "benchmark_id"])
+    if len(matched):
+        lines += [
+            "",
+            "Zeros are cheap to guess (night-time irradiance is 0 whatever the evidence says), so the non-zero "
+            "count is the informative one.",
+            "",
+            "| task | surface | future steps given exactly | of which non-zero | horizon |",
+            "|---|---|---|---|---|",
+        ]
+        lines += [
+            f"| {r['benchmark_id']} | {r['surface']} | {r['exact_pairs']} | {r['exact_nonzero_pairs']} | {r['horizon']} |"
+            for _, r in matched.iterrows()
+        ]
+    return lines
 
 
 def write_leakage_report(
@@ -127,6 +169,8 @@ def write_leakage_report(
         lines += ["| task | surface | run length | starts at future step | horizon |", "|---|---|---|---|---|"]
         for _, r in hits.iterrows():
             lines.append(f"| {r['benchmark_id']} | {r['surface']} | {r['run_length']} | {r['future_start']} | {r['horizon']} |")
+
+    lines += _pair_section(scan)
 
     untestable = sorted(scan.loc[scan["untestable"], "benchmark_id"].unique())
     lines += [

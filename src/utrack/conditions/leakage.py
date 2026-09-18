@@ -84,6 +84,54 @@ def find_future_run(text: str, future_values: list[float], min_run: int = DEFAUL
     return max(hits, key=lambda h: h.run_length) if hits else None
 
 
+_TIMESTAMP_CAPTURE = re.compile(r"(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})")
+_NUMBER_AFTER = re.compile(r"-?\d+(?:\.\d+)?")
+_ONLY_SEPARATORS = re.compile(r"[\s,:=)(]*")
+
+
+def timestamped_values(text: str) -> list[tuple[str, float]]:
+    """`(timestamp, value)` pairs in the text: a timestamp followed directly (through only spaces,
+    commas, colons, equals signs or brackets) by a number, as in `(2022-02-09 12:00:00, 903)`."""
+    matches = list(_TIMESTAMP_CAPTURE.finditer(text))
+    pairs = []
+    for i, m in enumerate(matches):
+        stop = matches[i + 1].start() if i + 1 < len(matches) else len(text)
+        segment = text[m.end() : min(stop, m.end() + 30)]
+        number = _NUMBER_AFTER.search(segment)
+        if number and _ONLY_SEPARATORS.fullmatch(segment[: number.start()]):
+            pairs.append((m.group(1), float(number.group())))
+    return pairs
+
+
+def matching_future_pairs(
+    text: str, future_timestamps: list[str], future_values: list[float]
+) -> tuple[int, int, int]:
+    """(pairs given at a future timestamp, how many carry the true value there, how many of those
+    are non-zero).
+
+    Catches what the run detector cannot: values handed over at scattered timestamps, such as one
+    every third hour. Zeros are counted apart because they are cheap to guess (night-time solar
+    irradiance is 0 whatever the evidence says)."""
+    truth = dict(zip(future_timestamps, future_values))
+    at_future = [(ts, v) for ts, v in timestamped_values(text) if ts in truth]
+    exact = [(ts, v) for ts, v in at_future if np.isclose(abs(v), abs(truth[ts]), rtol=REL_TOL, atol=1e-9)]
+    return len(at_future), len(exact), sum(v != 0 for _, v in exact)
+
+
+def leaks_beyond_history(
+    text: str, history: str, future_values: list[float], min_run: int = DEFAULT_MIN_RUN
+) -> LeakHit | None:
+    """A run of future values in `text` that the history does not already explain.
+
+    A future that repeats a stretch of the history is not a leak (the forecaster sees the history),
+    so a hit in the full text counts only if the history alone has no such run, or a shorter one."""
+    hit = find_future_run(text, future_values, min_run)
+    if hit is None:
+        return None
+    in_history = find_future_run(history, future_values, min_run)
+    return hit if in_history is None or hit.run_length > in_history.run_length else None
+
+
 def is_untestable(future_values: list[float], min_run: int = DEFAULT_MIN_RUN) -> bool:
     """True when no window of `min_run` future values holds `MIN_DISTINCT` distinct values, so the
     scan cannot tell a leak from coincidence for this task."""

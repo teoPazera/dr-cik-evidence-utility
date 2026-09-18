@@ -43,6 +43,23 @@ def test_u1_selection_matches_the_config_rule(dataset) -> None:
     assert [r["benchmark_id"] for r in recorded] == [e["benchmark_id"] for e in expected]
 
 
+def test_no_u1_request_holds_a_run_of_future_values(dataset) -> None:
+    from utrack.reports import cost_estimate as cost_mod
+
+    selection = json.loads((REPO_ROOT / U1_TASKS).read_text(encoding="utf-8"))
+    cost_cfg = CONFIG["cost_estimate"]
+    requests = cost_mod.build_u1_requests(
+        dataset,
+        [row["benchmark_id"] for row in selection["tasks"]],
+        _active_condition_ids(CONFIG),
+        cost_cfg["repeats"],
+        cost_cfg["n_samples"],
+        CONFIG["conditions"]["seed"],
+    )
+    assert len(requests) == len(selection["tasks"]) * len(_active_condition_ids(CONFIG)) * cost_cfg["repeats"]
+    assert cost_mod.request_leaks(dataset, requests, CONFIG["conditions"]["leakage_min_run"]) == []
+
+
 def test_no_future_run_reaches_the_forecaster_input_on_any_dev_task(dataset) -> None:
     scan = leakage_report_mod.scan_dev_tasks(dataset, CONFIG["conditions"]["seed"], CONFIG["conditions"]["leakage_min_run"])
     metadata_hits = scan[(scan["surface"] == "metadata") & (scan["run_length"] > 0)]

@@ -1,1 +1,2 @@
-# Scorer: CRPS, scaling, aggregation, utility (plan_a.md 3.1, U0.3). Not yet implemented.
+# Scorer: CRPS (crps.py), scaling (scaling.py), aggregation and winsorisation
+# (aggregate.py), utility (utility.py). See plan_a.md 3.1 and U0.3.

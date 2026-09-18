@@ -9,11 +9,35 @@ code that renders documents to a prompt must shuffle first (plan_a.md 1.2,
 from __future__ import annotations
 
 import json
+import logging
 from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 
+import numpy as np
+import pandas as pd
+
 from utrack.data.schema import Document, ForecastInput, Task, TaskLabels
+
+logger = logging.getLogger(__name__)
+
+
+def fill_history_forward(history_values: list[float | None], benchmark_id: str = "") -> np.ndarray:
+    """Forward/back-fill NaN or None history values (U0.2's audit found 13 tasks, none in
+    the dev set, with NaN history; reported there, not fixed - handled here instead since
+    neither a forecaster nor a scaling denominator can compute on NaN). Logs when it
+    actually does something."""
+    arr = pd.Series(history_values, dtype="float64")
+    n_missing = int(arr.isna().sum())
+    if n_missing:
+        logger.warning(
+            "forward/back-filling %d/%d missing history values for %s",
+            n_missing,
+            len(arr),
+            benchmark_id or "<unknown task>",
+        )
+        arr = arr.ffill().bfill()
+    return arr.to_numpy()
 
 
 def load_jsonl(path: Path) -> list[dict]:

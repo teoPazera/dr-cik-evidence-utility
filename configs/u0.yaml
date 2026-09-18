@@ -22,3 +22,16 @@ expected_counts:
   documents_by_role:
     supporting: 3367
     distractor: 6975
+
+# U0.4: zero-cost statistical-forecaster baseline, condition C0 (no context), all
+# 199 dev tasks. Seed is a config value (plan_a.md 5.2.7); per-cell seeds are derived
+# from it deterministically (see reports/baseline.py:_cell_seed), not stored per-task.
+baseline:
+  condition_id: C0
+  n_samples: 100
+  seed: 20260918
+  forecasters: [last_value_naive, seasonal_naive]
+  # A2 needs a seasonal lag in steps; this is the fallback used when a task's own
+  # seasonal_period does not resolve to a usable multi-step season (U0.4 finding:
+  # this is the common case - see forecasters/base.py:resolve_seasonal_period_steps).
+  scaling_a2_fallback_lag_steps: 1

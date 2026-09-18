@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from utrack.data.loader import load_dataset
+from utrack.data.loader import fill_history_forward, load_dataset
 from utrack.data.schema import ForecastInput, TaskLabels
 
 
@@ -127,3 +127,13 @@ def test_task_labels_carries_labels(tmp_path: Path) -> None:
     hidden_labels = dataset.labels("task_hidden")
     assert hidden_labels.future_values == []
     assert hidden_labels.gt_evidence == []
+
+
+def test_fill_history_forward_fills_nan_and_leading_nan() -> None:
+    filled = fill_history_forward([None, 1.0, float("nan"), 3.0])
+    assert list(filled) == [1.0, 1.0, 1.0, 3.0]
+
+
+def test_fill_history_forward_no_missing_is_unchanged() -> None:
+    filled = fill_history_forward([1.0, 2.0, 3.0])
+    assert list(filled) == [1.0, 2.0, 3.0]

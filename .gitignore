@@ -24,6 +24,9 @@ dist/
 !/artifacts/**/
 !/artifacts/**/*.md
 !/artifacts/**/*.json
+# U0 baseline store: free and deterministic to regenerate, not committed (5.2.9).
+# Must come after the whitelist above: the last matching rule wins.
+/artifacts/u0/forecast_store/
 
 # OS
 .DS_Store

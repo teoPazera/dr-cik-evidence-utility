@@ -18,8 +18,17 @@ from utrack.data import audit as audit_mod
 from utrack.data import external as external_mod
 from utrack.data import loader as loader_mod
 from utrack.data import snapshot as snapshot_mod
+from utrack.reports import baseline as baseline_mod
+from utrack.store.forecast_store import ForecastStore
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+
+# Where U0.4's outputs live. The forecast store is git-ignored (plan_a.md 5.2.9: free and
+# deterministic, regenerated where needed); the scores parquet and report are committed.
+BASELINE_STORE = Path("artifacts") / "u0" / "forecast_store" / "baseline_cells.jsonl"
+BASELINE_MANIFEST = Path("artifacts") / "u0" / "forecast_store" / "baseline_manifest.json"
+BASELINE_SCORES = Path("artifacts") / "u0" / "baseline_scores.parquet"
+BASELINE_REPORT = Path("artifacts") / "u0" / "baseline_report.md"
 
 
 def _load_yaml(path: Path) -> dict:
@@ -166,6 +175,67 @@ def external_sync() -> None:
     """Clone/checkout Dr-CiK and context-is-key-forecasting at their pinned commits."""
     summary = external_mod.sync_all(REPO_ROOT, _machine_name())
     click.echo(json.dumps(summary, indent=2))
+
+
+@main.group()
+def run() -> None:
+    """Run forecasters and write raw trajectories to the forecast store."""
+
+
+@run.command("baseline")
+def run_baseline_cmd() -> None:
+    """U0.4: zero-cost statistical forecasters, condition C0, all dev tasks."""
+    store_path = REPO_ROOT / BASELINE_STORE
+    if store_path.exists():
+        raise click.ClickException(
+            f"{BASELINE_STORE} already exists; the store is append-only, so a rerun would duplicate "
+            "every cell. Delete it (it is git-ignored and deterministic) to regenerate."
+        )
+    cfg = _u0_config()
+    dataset = loader_mod.load_dataset(REPO_ROOT, cfg["dataset"])
+    manifest = baseline_mod.run_baseline(
+        REPO_ROOT, dataset, cfg, _machine_name(), store_path, REPO_ROOT / BASELINE_MANIFEST
+    )
+    click.echo(f"wrote {manifest.n_cells} cells to {BASELINE_STORE}")
+    click.echo(f"wrote {BASELINE_MANIFEST}")
+
+
+@main.group()
+def score() -> None:
+    """Score stored forecasts (pure function of the store; free to rerun)."""
+
+
+@score.command("baseline")
+def score_baseline_cmd() -> None:
+    """Score the U0.4 baseline store under all three scalings."""
+    cfg = _u0_config()
+    dataset = loader_mod.load_dataset(REPO_ROOT, cfg["dataset"])
+    store = ForecastStore(REPO_ROOT / BASELINE_STORE)
+    df = baseline_mod.score_baseline(dataset, store, cfg)
+    if df.empty:
+        raise click.ClickException(f"no cells found in {BASELINE_STORE}; run `utrack run baseline` first")
+    baseline_mod.write_baseline_scores(df, REPO_ROOT / BASELINE_SCORES)
+    click.echo(f"wrote {BASELINE_SCORES} ({len(df)} rows)")
+
+
+@main.group()
+def report() -> None:
+    """Write human-readable reports from scored results."""
+
+
+@report.command("baseline")
+def report_baseline_cmd() -> None:
+    """Write the U0.4 baseline report from baseline_scores.parquet."""
+    import pandas as pd
+
+    scores_path = REPO_ROOT / BASELINE_SCORES
+    if not scores_path.exists():
+        raise click.ClickException(f"{BASELINE_SCORES} not found; run `utrack score baseline` first")
+    df = pd.read_parquet(scores_path)
+    baseline_mod.write_baseline_report(
+        df, REPO_ROOT / BASELINE_REPORT, paper_note=baseline_mod.PAPER_COMPARISON_NOTE
+    )
+    click.echo(f"wrote {BASELINE_REPORT}")
 
 
 if __name__ == "__main__":

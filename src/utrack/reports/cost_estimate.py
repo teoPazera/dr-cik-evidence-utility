@@ -32,7 +32,7 @@ from utrack.forecasters.llm_prompt import (
 )
 
 TOKEN_MODEL_NAMES = ("low", "high")
-EXAMPLE_REQUEST = ("task_163", "C1")  # a small request, shown in full in the report
+EXAMPLE_REQUEST = ("task_200", "C1")  # structural business-change example, shown in full in the report
 
 
 def estimate_tokens(text: str, chars_per_token: float, digits_per_token: float) -> int:

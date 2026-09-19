@@ -20,7 +20,7 @@
     "model": "gemini-3.1-flash-lite",
     "messages": [
       {
-        "role": "system",
+        "role": "user",
         "content": [
           {
             "type": "text",
@@ -33,10 +33,10 @@
       },
       {
         "role": "user",
-        "content": "Produce one forecast that follows the required format."
+        "content": "Now produce one independent forecast. Return only the forecast in (timestamp, value) format between <forecast> and </forecast> tags; do not include comments or other text."
       }
     ],
     "temperature": 1.0,
-    "max_tokens": 2400
+    "max_tokens": 8000
   }
 }

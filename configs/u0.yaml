@@ -44,9 +44,19 @@ conditions:
   leakage_min_run: 4     # consecutive future values that count as a leak (reports/leakage.py)
 
 u1_tasks:
-  fixed: [task_42, task_163, task_201]   # the repository sample tasks
-  n_extra: 2
+  # Decision F, resolved 2026-09-19: a focused business-volume set for the
+  # downstream Zurich monthly GWP forecasting case. All are daily retail-sales
+  # tasks and together cover temporary reporting/promotion effects and persistent
+  # business-expansion level shifts. task_42 is retained because it is the U1.2
+  # smoke-test task already used for paid calls.
+  fixed: [task_42, task_49, task_52, task_200, task_204]
+  n_extra: 0
   seed: 20260918
+  selection_mode: explicit
+  rationale: >-
+    Focus U1 on daily commercial volume forecasting relevant to Zurich monthly GWP:
+    temporary data/reporting anomalies, temporary promotional effects, and persistent
+    level shifts after business expansion.
 
 # U0.6: dry-run cost estimate for U1 (nothing is sent). Decisions C, D, E and I are open; these
 # are the plan defaults and stand-ins, not choices.

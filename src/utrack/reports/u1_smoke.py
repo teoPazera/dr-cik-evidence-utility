@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from typing import Any, Callable
 from pathlib import Path
 
 import numpy as np
@@ -34,6 +35,7 @@ def run_smoke(
     machine_name: str,
     store_path: Path,
     manifest_path: Path,
+    progress_callback: Callable[[dict[str, Any]], None] | None = None,
 ) -> RunManifest:
     """Run exactly task_42 C0/C1, one repeat, 25 requested samples per condition."""
     task_id = "task_42"
@@ -71,10 +73,35 @@ def run_smoke(
     )
     store = ForecastStore(store_path)
     forecast_input = dataset.forecast_input(task_id)
-    for condition_id in condition_ids:
+    total_cells = len(condition_ids)
+    for cell_index, condition_id in enumerate(condition_ids, start=1):
+        if progress_callback is not None:
+            progress_callback({
+                "event": "cell_started",
+                "cell_index": cell_index,
+                "total_cells": total_cells,
+                "benchmark_id": task_id,
+                "condition_id": condition_id,
+                "repeat": repeat,
+                "n_samples": n_samples,
+                "spent_usd": forecaster.ledger.spent_usd,
+                "cost_cap_usd": forecaster.ledger.cap_usd,
+            })
         condition = build_condition(condition_id, dataset, task_id, int(u0_cfg["conditions"]["seed"]))
         seed = derive_seed(int(u0_cfg["conditions"]["seed"]), task_id, condition_id, str(repeat), forecaster.name)
-        output = forecaster.forecast(forecast_input, condition.context, n_samples=n_samples, seed=seed)
+        def on_attempt(progress: dict[str, Any]) -> None:
+            if progress_callback is not None:
+                progress_callback({
+                    **progress,
+                    "cell_index": cell_index,
+                    "total_cells": total_cells,
+                    "condition_id": condition_id,
+                    "repeat": repeat,
+                })
+
+        output = forecaster.forecast(
+            forecast_input, condition.context, n_samples=n_samples, seed=seed, progress_callback=on_attempt
+        )
         store.append(
             build_cell_record(
                 benchmark_id=task_id,
@@ -88,6 +115,20 @@ def run_smoke(
             )
         )
         manifest.n_cells += 1
+        if progress_callback is not None:
+            progress_callback({
+                "event": "cell_stored",
+                "cell_index": cell_index,
+                "total_cells": total_cells,
+                "benchmark_id": task_id,
+                "condition_id": condition_id,
+                "repeat": repeat,
+                "valid_samples": output.n_valid,
+                "requested_samples": n_samples,
+                "cell_cost_usd": output.cost_usd,
+                "spent_usd": forecaster.ledger.spent_usd,
+                "cost_cap_usd": forecaster.ledger.cap_usd,
+            })
         if output.n_valid < n_samples:
             break
     manifest.finished_at = datetime.now(timezone.utc).isoformat()

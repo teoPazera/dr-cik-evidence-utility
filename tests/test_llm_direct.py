@@ -183,3 +183,22 @@ def test_direct_forecaster_uses_raw_response_headers_for_exact_cost() -> None:
     assert request["cache_read_cost_usd"] == pytest.approx(0.0001)
     assert request["call_id"] == "raw-call-1"
     assert len(raw.calls) == 1
+
+
+def test_direct_forecaster_emits_attempt_progress() -> None:
+    fi = _forecast_input()
+    client = FakeClient([
+        _response("not a forecast"),
+        _response("<forecast>\n(2026-01-01 02:00:00, 2)\n(2026-01-01 03:00:00, 3)\n</forecast>"),
+    ])
+    events = []
+    out = LiteLLMDirectForecaster(client=client, n_retries=2, cost_cap_usd=1.0).forecast(
+        fi, context=None, n_samples=1, seed=0, progress_callback=events.append
+    )
+
+    assert out.n_valid == 1
+    assert [event["event"] for event in events] == [
+        "cell_started", "attempt_started", "attempt_rejected", "attempt_started", "attempt_accepted", "cell_finished"
+    ]
+    assert events[-1]["valid_samples"] == 1
+    assert events[-1]["complete"] is True

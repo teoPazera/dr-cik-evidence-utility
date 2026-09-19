@@ -201,7 +201,7 @@ def conditions() -> None:
 
 @conditions.command("select")
 def conditions_select() -> None:
-    """Select the U1 task set (Decision F default) and write artifacts/u0/u1_tasks.json."""
+    """Select the configured U1 task set and write artifacts/u0/u1_tasks.json."""
     cfg = _u0_config()
     dataset = loader_mod.load_dataset(REPO_ROOT, cfg["dataset"])
     fixed, n_extra, seed = cfg["u1_tasks"]["fixed"], cfg["u1_tasks"]["n_extra"], cfg["u1_tasks"]["seed"]
@@ -215,6 +215,8 @@ def conditions_select() -> None:
         base_seed=cfg["conditions"]["seed"],
         condition_ids=_active_condition_ids(cfg),
         dataset_revision=cfg["dataset"]["revision"],
+        selection_mode=cfg["u1_tasks"].get("selection_mode", "seeded_coverage"),
+        rationale=cfg["u1_tasks"].get("rationale"),
     )
     path = REPO_ROOT / U1_TASKS
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -382,15 +384,46 @@ U1_SMOKE_SCORES = Path("artifacts") / "u1" / "smoke" / "scores.parquet"
 U1_SMOKE_REPORT = Path("artifacts") / "u1" / "smoke" / "report.md"
 
 
+def _format_u1_progress(progress: dict) -> str:
+    """One flushed, human-readable progress line for long-running paid U1 calls."""
+    cell = f"cell {progress.get('cell_index', '?')}/{progress.get('total_cells', '?')}"
+    task = progress.get("benchmark_id", "?")
+    condition = progress.get("condition_id", "?")
+    repeat = progress.get("repeat")
+    repeat_text = f", repeat {repeat + 1}" if isinstance(repeat, int) else ""
+    samples = (
+        f"samples {progress.get('valid_samples', 0)}/{progress.get('requested_samples', progress.get('n_samples', '?'))}"
+    )
+    attempts = progress.get("attempts")
+    max_attempts = progress.get("max_attempts")
+    attempt_text = f", attempt {attempts}/{max_attempts}" if attempts is not None else ""
+    spent = progress.get("spent_usd")
+    cap = progress.get("cost_cap_usd")
+    cost_text = f", spend ${spent:.4f}/${cap:.2f}" if isinstance(spent, (int, float)) and isinstance(cap, (int, float)) else ""
+    detail = progress.get("message")
+    suffix = f" — {detail}" if detail else ""
+    return f"[U1 {progress.get('event', 'progress')}] {cell}: {task}/{condition}{repeat_text}, {samples}{attempt_text}{cost_text}{suffix}"
+
+
 @run.command("u1-smoke")
 def run_u1_smoke_cmd() -> None:
-    """Paid U1.2-style smoke: task_42, C0/C1, one repeat, 25 samples each."""
+    """Paid U1.2-style smoke: task_42, C0/C1, one repeat, 25 samples each; prints live progress."""
     if U1_SMOKE_STORE.exists():
         raise click.ClickException(f"{U1_SMOKE_STORE} already exists; smoke stores are append-only.")
     cfg = _u0_config()
     u1_cfg = _load_yaml(REPO_ROOT / "configs" / "u1.yaml")
     dataset = loader_mod.load_dataset(REPO_ROOT, cfg["dataset"])
-    manifest = u1_smoke_mod.run_smoke(REPO_ROOT, dataset, cfg, u1_cfg, _machine_name(), REPO_ROOT / U1_SMOKE_STORE, REPO_ROOT / U1_SMOKE_MANIFEST)
+    click.echo("[U1] starting smoke run: 2 cells × 25 requested samples; progress is printed after every provider attempt.")
+    manifest = u1_smoke_mod.run_smoke(
+        REPO_ROOT,
+        dataset,
+        cfg,
+        u1_cfg,
+        _machine_name(),
+        REPO_ROOT / U1_SMOKE_STORE,
+        REPO_ROOT / U1_SMOKE_MANIFEST,
+        progress_callback=lambda progress: click.echo(_format_u1_progress(progress), err=True),
+    )
     click.echo(f"wrote {manifest.n_cells} smoke cells to {U1_SMOKE_STORE}")
     click.echo(f"wrote {U1_SMOKE_MANIFEST}")
 

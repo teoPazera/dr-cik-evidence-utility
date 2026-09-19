@@ -1,9 +1,8 @@
-"""U1 task selection (Decision F, default rule; the decision itself is still Teo's).
+"""U1 task selection (Decision F).
 
-The three repository sample tasks, plus `n_extra` dev tasks picked one at a time by a seeded
-draw among dev tasks whose frequency AND horizon are both not yet covered by the tasks chosen so
-far. Candidates are sorted by natural id before the draw, so the result never depends on the
-order the dataset happens to be loaded in.
+The resolved U1 configuration uses an explicit, business-volume task set selected for relevance
+to the downstream Zurich monthly GWP forecasting case. The legacy seeded coverage rule remains
+supported for reproducible exploratory selections.
 """
 
 from __future__ import annotations
@@ -15,11 +14,17 @@ from utrack.data.audit import approx_token_count
 from utrack.data.loader import Dataset
 from utrack.seeds import derive_seed
 
-RULE_TEXT = (
+LEGACY_RULE_TEXT = (
     "Fixed: the repository sample tasks. Then, n_extra times: among dev tasks not yet selected whose "
     "frequency and prediction_length are both absent from the tasks selected so far, draw one with "
     "numpy default_rng(sha256-derived seed of (seed, 'u1-task-selection', step)) over the natural-id-"
     "sorted candidates."
+)
+
+EXPLICIT_RULE_TEXT = (
+    "Explicit Decision F task list: daily commercial-sales tasks selected for relevance to the downstream "
+    "Zurich monthly GWP forecasting case; coverage includes temporary reporting/promotion effects and "
+    "persistent business-expansion level shifts."
 )
 
 
@@ -33,6 +38,8 @@ def selection_record(
     base_seed: int,
     condition_ids: list[str],
     dataset_revision: str,
+    selection_mode: str = "seeded_coverage",
+    rationale: str | None = None,
 ) -> dict:
     """The content of artifacts/u0/u1_tasks.json: the rule, the seed and one row per chosen task."""
     tasks = []
@@ -54,8 +61,14 @@ def selection_record(
         )
     return {
         "decision": "F",
-        "status": "default rule applied; Decision F is not yet resolved by Teo (configs/decisions.md)",
-        "rule": RULE_TEXT,
+        "status": (
+            "resolved explicit task set"
+            if selection_mode == "explicit"
+            else "legacy seeded coverage rule; Decision F not yet resolved by Teo"
+        ),
+        "rule": EXPLICIT_RULE_TEXT if selection_mode == "explicit" else LEGACY_RULE_TEXT,
+        "selection_mode": selection_mode,
+        "rationale": rationale,
         "dataset_revision": dataset_revision,
         "fixed_tasks": fixed,
         "n_extra": n_extra,

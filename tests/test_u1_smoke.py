@@ -3,7 +3,7 @@ import pandas as pd
 
 from utrack.data.schema import ForecastInput, Task
 from utrack.data.loader import Dataset
-from utrack.reports.u1_smoke import score_smoke, write_smoke_report
+from utrack.reports.u1_smoke import run_smoke, score_smoke, write_smoke_report
 from utrack.store.forecast_store import ForecastStore
 
 
@@ -42,3 +42,45 @@ def test_write_smoke_report_mentions_proxy_cost_and_cache(tmp_path) -> None:
     text=path.read_text()
     assert "proxy-reported total cost" in text
     assert "80/100" in text
+
+
+def test_run_smoke_reports_cell_and_store_progress(tmp_path, monkeypatch) -> None:
+    from utrack.forecasters.base import ForecasterOutput
+
+    class FakeForecaster:
+        name = "fake"
+
+        def __init__(self, **kwargs):
+            self.ledger = type("Ledger", (), {"spent_usd": 0.01, "cap_usd": 5.0})()
+
+        def forecast(self, forecast_input, context, n_samples, seed, progress_callback=None):
+            if progress_callback is not None:
+                progress_callback({
+                    "event": "attempt_accepted",
+                    "benchmark_id": forecast_input.benchmark_id,
+                    "requested_samples": n_samples,
+                    "valid_samples": n_samples,
+                    "attempts": 1,
+                    "max_attempts": n_samples + 3,
+                    "spent_usd": self.ledger.spent_usd,
+                    "cost_cap_usd": self.ledger.cap_usd,
+                    "elapsed_seconds": 0.1,
+                })
+            return ForecasterOutput(
+                samples=np.tile([[4.0, 5.0]], (n_samples, 1)),
+                forecaster_name=self.name, forecaster_version="v", model_identifier="m",
+                n_requested=n_samples, n_valid=n_samples, seed=seed, sampling_params={},
+                token_counts={"input": 0, "output": 0, "total": 0, "cached_input": 0}, cost_usd=0.01, notes=[]
+            )
+
+    monkeypatch.setattr("utrack.reports.u1_smoke.LiteLLMDirectForecaster", FakeForecaster)
+    events = []
+    cfg = {"dataset": {"revision": "r"}, "conditions": {"seed": 1}}
+    u1 = {"model": "m", "sampling": {"temperature": 1.0, "samples_per_cell": 1}, "n_retries": 3,
+          "cost_cap_usd": 5.0, "pricing_usd_per_million_tokens": {"input": 0.25, "output": 1.5}, "max_output_tokens": 8}
+    run_smoke(tmp_path, _dataset(), cfg, u1, "test", tmp_path / "cells.jsonl", tmp_path / "manifest.json", events.append)
+    names = [event["event"] for event in events]
+    assert names.count("cell_started") == 2
+    assert names.count("cell_stored") == 2
+    assert names.count("attempt_accepted") == 2
+    assert all(event["total_cells"] == 2 for event in events)

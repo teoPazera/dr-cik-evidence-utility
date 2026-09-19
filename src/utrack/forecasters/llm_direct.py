@@ -19,7 +19,7 @@ import os
 import re
 import time
 from dataclasses import dataclass, field
-from typing import Any, Mapping, Protocol
+from typing import Any, Callable, Mapping, Protocol
 
 import numpy as np
 from dotenv import load_dotenv
@@ -254,6 +254,7 @@ class LiteLLMDirectForecaster:
         context: str | None,
         n_samples: int,
         seed: int,
+        progress_callback: Callable[[dict[str, Any]], None] | None = None,
     ) -> ForecasterOutput:
         if n_samples < 1:
             raise ValueError("n_samples must be at least 1")
@@ -275,14 +276,35 @@ class LiteLLMDirectForecaster:
         max_attempts = n_samples + self.n_retries
         started = time.monotonic()
 
+        def report_progress(event: str, **details: Any) -> None:
+            if progress_callback is None:
+                return
+            progress_callback(
+                {
+                    "event": event,
+                    "benchmark_id": forecast_input.benchmark_id,
+                    "requested_samples": n_samples,
+                    "valid_samples": len(valid),
+                    "attempts": attempts,
+                    "max_attempts": max_attempts,
+                    "spent_usd": self.ledger.spent_usd,
+                    "cost_cap_usd": self.ledger.cap_usd,
+                    "elapsed_seconds": time.monotonic() - started,
+                    **details,
+                }
+            )
+
+        report_progress("cell_started")
         while len(valid) < n_samples and attempts < max_attempts:
             try:
                 self.ledger.ensure_can_spend(estimated_cost)
             except CostCapExceeded as exc:
                 notes.append(str(exc))
+                report_progress("cost_cap_blocked", message=str(exc))
                 break
 
             attempts += 1
+            report_progress("attempt_started")
             try:
                 request_kwargs = {
                     "model": self.model,
@@ -301,7 +323,9 @@ class LiteLLMDirectForecaster:
                 else:  # defensive: constructor guarantees one client exists
                     raise RuntimeError("no LiteLLM client configured")
             except Exception as exc:  # transport failures consume unknown provider cost; record and retry.
-                notes.append(f"request {attempts} failed: {type(exc).__name__}: {exc}")
+                message = f"request {attempts} failed: {type(exc).__name__}: {exc}"
+                notes.append(message)
+                report_progress("attempt_failed", message=message)
                 continue
 
             usage, request_cost, components = self._extract_usage_and_cost(response)
@@ -314,6 +338,7 @@ class LiteLLMDirectForecaster:
                 notes.append(f"request {attempts} returned no choices")
                 request_costs.append({"attempt": attempts, "cost_usd": request_cost, **components, **usage})
                 raw_outputs.append({"attempt": attempts, "content": None, "valid": False, "rejection_reason": "no choices"})
+                report_progress("attempt_rejected", message="request returned no choices", request_cost_usd=request_cost)
                 continue
 
             content = _object_or_mapping(_object_or_mapping(choices[0], "message", {}), "content", None)
@@ -322,9 +347,12 @@ class LiteLLMDirectForecaster:
             try:
                 valid.append(parse_cik_forecast(str(content or ""), expected))
                 raw_record["valid"] = True
+                report_progress("attempt_accepted", request_cost_usd=request_cost)
             except ValueError as exc:
                 raw_record["rejection_reason"] = str(exc)
-                notes.append(f"request {attempts} rejected: {exc}")
+                message = f"request {attempts} rejected: {exc}"
+                notes.append(message)
+                report_progress("attempt_rejected", message=message, request_cost_usd=request_cost)
             raw_outputs.append(raw_record)
 
         samples = np.asarray(valid, dtype=float)
@@ -347,6 +375,7 @@ class LiteLLMDirectForecaster:
         }
         if len(valid) < n_samples:
             notes.append(f"incomplete cell: requested {n_samples}, valid {len(valid)}")
+        report_progress("cell_finished", complete=len(valid) == n_samples)
 
         return ForecasterOutput(
             samples=samples,

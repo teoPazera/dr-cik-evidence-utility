@@ -36,11 +36,12 @@ baseline:
   # this is the common case - see forecasters/base.py:resolve_seasonal_period_steps).
   scaling_a2_fallback_lag_steps: 1
 
-# U0.5: condition builder (Decisions G and H at their plan defaults; both still open) and U1 task
-# selection (Decision F default). Seeds are config values (plan_a.md 5.2.7).
+# U0.5: condition builder (Decisions G and H, resolved 2026-09-19) and U1 task
+# selection (Decision F). Seeds are config values (plan_a.md 5.2.7).
 conditions:
   seed: 20260918
   enable_c4: false       # C4 (all documents, about 20k tokens per call) stays off unless Teo turns it on
+  placebo_length_matched: true  # Decision H2: render C3 to match the target task C1 context length
   leakage_min_run: 4     # consecutive future values that count as a leak (reports/leakage.py)
 
 u1_tasks:

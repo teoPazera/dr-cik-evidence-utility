@@ -40,6 +40,8 @@ def render_preview(condition: Condition, dataset: Dataset, dataset_revision: str
         lines.append(f"- documents used, in rendered order: {', '.join(condition.document_ids)}")
     if condition.evidence_span_ids:
         lines.append(f"- evidence spans used, in rendered order: {', '.join(condition.evidence_span_ids)}")
+    if condition.target_approx_tokens is not None:
+        lines.append(f"- length-match target C1 approximate tokens (characters / 4): {condition.target_approx_tokens}")
     if condition.source_benchmark_id:
         source = dataset.tasks[condition.source_benchmark_id]
         lines.append(

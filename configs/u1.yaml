@@ -1,14 +1,18 @@
 # Stage U1 configuration.
 # No development or paid run has started. Remaining preconditions in
 # plan_a.md U1.0 must be satisfied before implementation/execution.
-status: not_started
+status: staged_run_ready
 provider: litellm
 api_style: openai-compatible
 model: gemini-3.1-flash-lite
 pricing_usd_per_million_tokens:
+  # Used only when LiteLLM does not return authoritative per-request cost headers.
+  # Cached prompt tokens are billed separately at the Gemini cache-read rate.
   input: 0.25
+  cached_input: 0.025
   output: 1.50
-cost_cap_usd: 5.0
+cost_cap_usd: 15.0
+warning_thresholds_usd: [5.0, 10.0, 15.0]
 n_retries: 3
 max_output_tokens: 8000
 sampling:

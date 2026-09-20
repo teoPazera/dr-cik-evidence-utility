@@ -24,6 +24,7 @@ from utrack.reports import baseline as baseline_mod
 from utrack.reports import cost_estimate as cost_mod
 from utrack.reports import leakage as leakage_mod
 from utrack.reports import u1_smoke as u1_smoke_mod
+from utrack.reports import u1 as u1_mod
 from utrack.store.forecast_store import ForecastStore
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -188,6 +189,8 @@ LEAKAGE_REPORT = Path("artifacts") / "u0" / "leakage_report.md"
 
 
 def _active_condition_ids(cfg: dict) -> list[str]:
+    if not cfg["conditions"].get("placebo_length_matched", False):
+        raise ValueError("Decision H requires the length-matched C3 placebo; set conditions.placebo_length_matched: true")
     ids = ["C0", "C1", "C2", "C3"]
     if cfg["conditions"]["enable_c4"]:
         ids.append("C4")
@@ -382,6 +385,8 @@ U1_SMOKE_STORE = Path("artifacts") / "u1" / "smoke" / "cells.jsonl"
 U1_SMOKE_MANIFEST = Path("artifacts") / "u1" / "smoke" / "manifest.json"
 U1_SMOKE_SCORES = Path("artifacts") / "u1" / "smoke" / "scores.parquet"
 U1_SMOKE_REPORT = Path("artifacts") / "u1" / "smoke" / "report.md"
+U1_SMOKE_PLOT = Path("artifacts") / "u1" / "smoke" / "task42_c0_c1_trajectories.png"
+U1_SMOKE_CHECK = Path("artifacts") / "u1" / "smoke" / "u1_2_check.md"
 
 
 def _format_u1_progress(progress: dict) -> str:
@@ -403,6 +408,37 @@ def _format_u1_progress(progress: dict) -> str:
     detail = progress.get("message")
     suffix = f" — {detail}" if detail else ""
     return f"[U1 {progress.get('event', 'progress')}] {cell}: {task}/{condition}{repeat_text}, {samples}{attempt_text}{cost_text}{suffix}"
+
+
+
+U1_STORE = Path("artifacts") / "u1" / "forecast_store" / "u1_cells.jsonl"
+U1_MANIFEST = Path("artifacts") / "u1" / "forecast_store" / "u1_manifest.json"
+U1_LEDGER = Path("artifacts") / "u1" / "cost_ledger.md"
+U1_SCORES = Path("artifacts") / "u1" / "u1_scores.parquet"
+U1_REVIEW_DIR = Path("artifacts") / "u1" / "review"
+U1_REPORT = Path("artifacts") / "u1" / "u1_report.md"
+
+
+@run.command("u1")
+@click.option("--task", "task_ids", multiple=True, help="Task id; repeat for a subset. Defaults to configured U1 tasks.")
+@click.option("--condition", "condition_ids", multiple=True, help="Condition id; repeat for a subset. Defaults to enabled C0-C3.")
+@click.option("--repeat", "repeats", multiple=True, type=int, help="Zero-based repeat; defaults to 0 only for staged execution.")
+@click.option("--no-resume", is_flag=True, help="Fail-safe option: do not skip cells already in the append-only store.")
+def run_u1_cmd(task_ids: tuple[str, ...], condition_ids: tuple[str, ...], repeats: tuple[int, ...], no_resume: bool) -> None:
+    """Paid, resumable U1 cells; writes a live cost ledger after every stored cell."""
+    cfg = _u0_config(); u1_cfg = _load_yaml(REPO_ROOT / "configs" / "u1.yaml")
+    dataset = loader_mod.load_dataset(REPO_ROOT, cfg["dataset"])
+    selected = list(task_ids) or [r["benchmark_id"] for r in json.loads((REPO_ROOT / U1_TASKS).read_text())["tasks"]]
+    conditions = list(condition_ids) or _active_condition_ids(cfg)
+    selected_repeats = list(repeats) or [0]
+    unknown = set(selected) - set(dataset.tasks)
+    if unknown: raise click.ClickException(f"unknown task ids: {sorted(unknown)}")
+    unknown_conditions = set(conditions) - {"C0", "C1", "C2", "C3", "C4"}
+    if unknown_conditions: raise click.ClickException(f"unknown conditions: {sorted(unknown_conditions)}")
+    if any(r < 0 for r in selected_repeats): raise click.ClickException("repeats must be non-negative")
+    click.echo(f"[U1] planned {len(selected)*len(conditions)*len(selected_repeats)} cells; emergency cap ${float(u1_cfg['cost_cap_usd']):.2f}.")
+    manifest = u1_mod.run_u1(REPO_ROOT, dataset, cfg, u1_cfg, _machine_name(), REPO_ROOT / U1_STORE, REPO_ROOT / U1_MANIFEST, REPO_ROOT / U1_LEDGER, selected, conditions, selected_repeats, resume=not no_resume, progress_callback=lambda p: click.echo(_format_u1_progress(p), err=True))
+    click.echo(f"stored {manifest.n_cells} new cells; manifest {U1_MANIFEST}; live ledger {U1_LEDGER}")
 
 
 @run.command("u1-smoke")
@@ -451,6 +487,18 @@ def score() -> None:
     """Score stored forecasts (pure function of the store; free to rerun)."""
 
 
+
+@score.command("u1")
+def score_u1_cmd() -> None:
+    """Score the staged/full U1 forecast store under A1-A3; A3/B1 is headline."""
+    if not (REPO_ROOT / U1_STORE).exists(): raise click.ClickException(f"{U1_STORE} not found; run `utrack run u1` first")
+    scores = u1_mod.score_u1(loader_mod.load_dataset(REPO_ROOT, _u0_config()["dataset"]), _u0_config(), REPO_ROOT / U1_STORE)
+    if scores.empty: raise click.ClickException("no scoreable U1 cells")
+    (REPO_ROOT / U1_SCORES).parent.mkdir(parents=True, exist_ok=True); scores.to_parquet(REPO_ROOT / U1_SCORES, index=False)
+    click.echo(f"wrote {U1_SCORES} ({len(scores)} rows)")
+
+
+
 @score.command("u1-smoke")
 def score_u1_smoke_cmd() -> None:
     """Score the task_42 U1 smoke store. No provider requests are made."""
@@ -484,6 +532,16 @@ def report() -> None:
     """Write human-readable reports from scored results."""
 
 
+
+@report.command("u1")
+def report_u1_cmd() -> None:
+    """Generate staged U1 score table and per-task median/quantile review plots."""
+    import pandas as pd
+    if not (REPO_ROOT / U1_SCORES).exists(): raise click.ClickException(f"{U1_SCORES} not found; run `utrack score u1` first")
+    u1_mod.write_u1_review(loader_mod.load_dataset(REPO_ROOT, _u0_config()["dataset"]), pd.read_parquet(REPO_ROOT / U1_SCORES), REPO_ROOT / U1_STORE, REPO_ROOT / U1_REVIEW_DIR, REPO_ROOT / U1_REPORT)
+    click.echo(f"wrote {U1_REPORT} and plots under {U1_REVIEW_DIR}")
+
+
 @report.command("u1-smoke")
 def report_u1_smoke_cmd() -> None:
     """Write the U1 smoke CRPS, baseline comparison, token and cache-cost report."""
@@ -493,6 +551,26 @@ def report_u1_smoke_cmd() -> None:
     df = pd.read_parquet(REPO_ROOT / U1_SMOKE_SCORES)
     u1_smoke_mod.write_smoke_report(df, REPO_ROOT / BASELINE_SCORES, REPO_ROOT / U1_SMOKE_REPORT)
     click.echo(f"wrote {U1_SMOKE_REPORT}")
+
+
+@report.command("u1-smoke-check")
+def report_u1_smoke_check_cmd() -> None:
+    """Write U1.2 plots plus kill-condition and dry-run comparison check."""
+    if not U1_SMOKE_SCORES.exists():
+        raise click.ClickException(f"{U1_SMOKE_SCORES} not found; score the retained smoke store first")
+    store_path = REPO_ROOT / "artifacts" / "u1" / "smoke" / "cells_25samples.jsonl"
+    if not store_path.exists():
+        raise click.ClickException(f"{store_path.relative_to(REPO_ROOT)} not found")
+    import pandas as pd
+    cfg = _u0_config()
+    dataset = loader_mod.load_dataset(REPO_ROOT, cfg["dataset"])
+    scores = pd.read_parquet(REPO_ROOT / U1_SMOKE_SCORES)
+    u1_smoke_mod.write_smoke_plots(dataset, store_path, REPO_ROOT / U1_SMOKE_PLOT)
+    u1_smoke_mod.write_smoke_check(
+        dataset, scores, store_path, REPO_ROOT / COST_ESTIMATE, REPO_ROOT / U1_SMOKE_CHECK
+    )
+    click.echo(f"wrote {U1_SMOKE_PLOT}")
+    click.echo(f"wrote {U1_SMOKE_CHECK}")
 
 
 @report.command("baseline")

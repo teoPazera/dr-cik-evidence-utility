@@ -1,6 +1,6 @@
 # Evidence-Utility Track: Plan for Stages U0 and U1
 
-Status: draft for Teo's review, revised 2026-09-18. Section 1 was corrected after U0.1 and U0.2 against the loaded data (see `artifacts/u0/data_audit.md`); stages U0.1 to U0.3 are complete and committed, U0.4 onwards has not started.
+Status: draft for Teo's review, revised 2026-09-19. Section 1 was corrected after U0.1 and U0.2 against the loaded data (see `artifacts/u0/data_audit.md`); stages U0.1 to U0.3 are complete and committed, U0.4 onwards has not started.
 Companion file: `plan_a_follow_up.md` (provisional outline for U2 to U7; will change after U0, U1 and the supervisor discussion).
 
 ---
@@ -123,7 +123,7 @@ flowchart LR
 | C0 | no-context | none | Reference for utility. |
 | C1 | gt-evidence | the task's `gt_evidence` spans | Upper reference: the forecaster receives the correct evidence. |
 | C2 | supporting-concat | all supporting documents of the task, concatenated | Reproduces the "raw documents" condition that Dr-CiK reports as harmful. Observed, not gated. |
-| C3 | placebo | `gt_evidence` taken from a *different* task | Text of similar form that is irrelevant. Must not help. |
+| C3 | placebo | `gt_evidence` taken from a *different* task, rendered to match the target C1 evidence length | Text of similar form and length that is irrelevant. Must not help. |
 | C4 | all-docs-concat | every document of the task, shuffled, concatenated | Optional, off by default (about 20k tokens per call). |
 
 The placebo check is motivated by Sridhar et al. (arXiv:2608.22321), who found that for a family of text-conditioned forecasters, replacing the text with empty, shuffled or cross-domain text changed error by under 0.5%. A forecaster that behaves that way cannot be used to measure context quality.
@@ -207,16 +207,16 @@ Record every resolution in `configs/decisions.md` with date and reason.
 
 | Id | Decision | Options | Default | Blocking? |
 |---|---|---|---|---|
-| **A** | Scaling used for the headline scaled CRPS | A1: divide by (max − min) of the task's future values, the CiK convention (`inverse_mean_forecast_range`). A2: divide by the in-sample mean absolute seasonal-naive error (MASE-style, uses history only). A3: divide by mean absolute history value. | Compute and store all three. Headline choice made by Teo after the U0 report. | Blocks the U1 gate evaluation, not U0. |
-| **B** | Utility form | B1: absolute difference of winsorised scaled CRPS. B2: relative, `1 − score_ctx / score_base`. | Store both. Headline B1. Flag cells where either score hit the winsorisation cap, because capped scores hide differences. | No |
+| **A** | Scaling used for the headline scaled CRPS | A1: divide by (max − min) of the task's future values, the CiK convention (`inverse_mean_forecast_range`). A2: divide by the in-sample mean absolute seasonal-naive error (MASE-style, uses history only). A3: divide by mean absolute history value. | **Resolved 2026-09-19:** A3 is the headline; compute and store A1 and A2 as sensitivity analyses. | Blocks the U1 gate evaluation, not U0. |
+| **B** | Utility form | B1: absolute difference of winsorised scaled CRPS. B2: relative, `1 − score_ctx / score_base`. | **Resolved 2026-09-19:** Store both; headline B1. Flag cells where either score hit the winsorisation cap, because capped scores hide differences. | No |
 | **C** | LLM forecaster model and provider for U1 | To be chosen from what is approved on the company device. Requirements: temperature 1.0 sampling, context window of at least 32k tokens, ideally several samples per request (`n > 1`) so input tokens are billed once. | none | **Blocks U1** |
 | **D** | Forecaster prompt template | D1: port the CiK Direct Prompt template (`cik_benchmark/baselines/direct_prompt.py`, `make_prompt`; path and function name to verify in U0.1) with a context slot. D2: a new template. | D1. The final prompt text is shown to Teo and approved before any paid call. Any later change gets a new template version id stored in each cell. | **Blocks U1** |
 | **E** | Samples per forecast and repeats per cell in U1 | | 25 samples (the CiK convention) and 2 repeats. The 100-sample requirement applies only to the final hidden-test submission. | No |
 | **F** | U1 task set | | `task_42`, `task_49`, `task_52`, `task_200`, `task_204`: five daily commercial-sales tasks selected for relevance to the downstream Zurich monthly GWP case. They cover temporary reporting/promotion effects and persistent business-expansion level shifts. `task_42` remains because it was already used for U1 smoke-test calls. | No |
-| **G** | Rendering of contexts | Order and separators for evidence spans and for concatenated documents | Evidence spans in id order, one per line. Documents in seeded shuffled order, separated by a delimiter line carrying only a neutral index, never the role or subtype. | No |
-| **H** | Placebo construction | H1: `gt_evidence` from another task. H2: H1 plus a length-matched variant. | H1, source task chosen by a seeded assignment such that entity and variable differ from the target task and no task is its own placebo. | No |
+| **G** | Rendering of contexts | Order and separators for evidence spans and for concatenated documents | **Resolved 2026-09-19:** evidence spans in id order, one per line. Documents canonicalised by document id then seeded-shuffled, separated by a delimiter line carrying only a neutral index, never the role or subtype. | No |
+| **H** | Placebo construction | H1: `gt_evidence` from another task. H2: H1 plus a length-matched variant. | **Resolved 2026-09-19:** H1 + H2. Source task is chosen by a seeded assignment such that entity and variable differ from the target task and no task is its own placebo; its evidence is deterministically rendered to match the target C1 context length. | No |
 | **I** | U1 cost cap | | none. Indicative figures are in section 8, U1.0. | **Blocks U1** |
-| **J** | Whether a second LLM forecaster is included in U1 | | No. One model in U1. A second forecaster family is planned for a later stage. | No |
+| **J** | Whether a second LLM forecaster is included in U1 | | **Resolved 2026-09-19:** no. One model in U1; a second forecaster family is planned for a later stage. | No |
 | **K** | Sync channel between the two machines | K1: private GitHub remote. K2: company git host. K3: `git bundle` files over an approved transfer path. | K1, if company policy allows the MacBook to push to it. | **Blocks the first MacBook session** |
 | **L** | Network and providers permitted on the MacBook | Can it clone from GitHub, download from Hugging Face, and which LLM providers are approved? | none; checked at the first MacBook session with `utrack doctor` | **Blocks U0.1 on the MacBook and Decision C** |
 
@@ -327,7 +327,7 @@ This is a sanity check on about five tasks. It supports no statistical claim and
 
 - Decisions C, D, E and I are resolved in `configs/decisions.md`.
 - Teo has read the condition previews.
-- Indicative size, to be replaced by the U0.6 estimate: 5 tasks × 4 conditions × 2 repeats = 40 requests of 25 samples each, 1,000 generated trajectories. The token figures that follow are rough prior guesses, not measurements (nothing has been measured yet); U0.6 replaces them: serialised history about 330 to 1,200 tokens, `gt_evidence` a few hundred tokens, supporting documents concatenated about 4,700 to 6,100 tokens, full corpus about 18,000 to 22,000 tokens, output about 8 tokens per forecast step. With several samples per request this is roughly 0.2 million input and 0.6 million output tokens; with one sample per request, input rises about 25-fold.
+- Indicative size, to be replaced by the U0.6 estimate: 5 tasks × 4 conditions × 2 repeats = 40 cells of 25 samples each, 1,000 generated trajectories. The token figures that follow are rough prior guesses, not measurements (nothing has been measured yet); U0.6 replaces them: serialised history about 330 to 1,200 tokens, `gt_evidence` a few hundred tokens, supporting documents concatenated about 4,700 to 6,100 tokens, full corpus about 18,000 to 22,000 tokens, output about 8 tokens per forecast step. With several samples per request this is roughly 0.2 million input and 0.6 million output tokens; with one sample per request, input rises about 25-fold.
 
 ### U1.1 LLM forecaster adapter
 
@@ -382,7 +382,7 @@ If the task count differs from 5, scale "4 of 5" and "1 of 5" to the same propor
 | All pass | The forecaster can be used to measure context utility. | Proceed to planning U2 with Teo. |
 | G1 fails, G3 passes | The forecaster reacts to evidence but not in the helpful direction. | Inspect per task: evidence rendering, prompt wording, whether the evidence is sufficient on its own. Do not change the gate. |
 | G1 and G3 fail | The forecaster ignores the text. | Report. A different model (Decision C) is the first option; the track cannot continue with this forecaster. |
-| G2 fails | Irrelevant text improves forecasts, so utility would be confounded with a generic effect of added text, for example prompt length. | Add the length-matched placebo (Decision H2) and rerun C3 only. Do not proceed until resolved. |
+| G2 fails | Irrelevant length-matched text improves forecasts, so utility would be confounded with a generic effect of adding evidence-shaped text rather than its semantic relevance. | Inspect the placebo rendering and prompt; do not proceed until resolved. |
 | G4 fails | Parsing or cost problem. | Fix the adapter or prompt format; rerun the smoke test. |
 
 ### GATE U1

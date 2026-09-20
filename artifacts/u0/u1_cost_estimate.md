@@ -20,8 +20,8 @@ Tokens in millions, low to high.
 | C0 | 10 | 250 | 0.026 to 0.074 | 0.662 to 1.860 | 0.151 to 0.442 |
 | C1 | 10 | 250 | 0.028 to 0.076 | 0.697 to 1.907 | 0.151 to 0.442 |
 | C2 | 10 | 250 | 0.078 to 0.129 | 1.962 to 3.222 | 0.151 to 0.442 |
-| C3 | 10 | 250 | 0.027 to 0.075 | 0.681 to 1.881 | 0.151 to 0.442 |
-| all | 40 | 1000 | 0.160 to 0.355 | 4.003 to 8.869 | 0.605 to 1.769 |
+| C3 | 10 | 250 | 0.028 to 0.076 | 0.693 to 1.895 | 0.151 to 0.442 |
+| all | 40 | 1000 | 0.161 to 0.355 | 4.015 to 8.883 | 0.605 to 1.769 |
 
 ## 3. Cost
 
@@ -31,10 +31,10 @@ Prices set: input None, output None (null = not set).
 
 | billing | tokens low (in / out, millions) | tokens high (in / out, millions) | cost low | cost high | cost high at 80% valid rate |
 |---|---|---|---|---|---|
-| A: several samples per request | 0.160 / 0.605 | 0.355 / 1.769 | price not set | price not set | price not set |
-| B: one sample per request | 4.003 / 0.605 | 8.869 / 1.769 | price not set | price not set | price not set |
+| A: several samples per request | 0.161 / 0.605 | 0.355 / 1.769 | price not set | price not set | price not set |
+| B: one sample per request | 4.015 / 0.605 | 8.883 / 1.769 | price not set | price not set | price not set |
 
-Plan section 8 (U1.0) guessed roughly 0.2 million input and 0.6 million output tokens with several samples per request, and about 25 times the input with one sample per request. Measured (low estimate): 0.160 million input and 0.605 million output under billing A; input under billing B is 25.0 times billing A.
+Plan section 8 (U1.0) guessed roughly 0.2 million input and 0.6 million output tokens with several samples per request, and about 25 times the input with one sample per request. Measured (low estimate): 0.161 million input and 0.605 million output under billing A; input under billing B is 25.0 times billing A.
 
 ## 4. Input tokens per request, by task and condition
 
@@ -42,11 +42,11 @@ Low to high, tokens. Repeats of the same task and condition are identical, so on
 
 | task | C0 | C1 | C2 | C3 |
 |---|---|---|---|---|
-| task_42 | 1,923 to 5,291 | 2,071 to 5,502 | 8,118 to 11,620 | 1,984 to 5,364 |
-| task_49 | 2,996 to 8,450 | 3,143 to 8,660 | 8,026 to 13,821 | 3,091 to 8,566 |
-| task_52 | 3,001 to 8,470 | 3,146 to 8,678 | 5,940 to 11,523 | 3,044 to 8,513 |
+| task_42 | 1,923 to 5,291 | 2,071 to 5,502 | 8,118 to 11,620 | 2,046 to 5,437 |
+| task_49 | 2,996 to 8,450 | 3,143 to 8,660 | 8,026 to 13,821 | 3,141 to 8,637 |
+| task_52 | 3,001 to 8,470 | 3,146 to 8,678 | 5,940 to 11,523 | 3,130 to 8,599 |
 | task_200 | 2,620 to 7,464 | 2,750 to 7,618 | 9,698 to 14,996 | 2,726 to 7,591 |
-| task_204 | 2,707 to 7,519 | 2,836 to 7,672 | 7,452 to 12,478 | 2,778 to 7,592 |
+| task_204 | 2,707 to 7,519 | 2,836 to 7,672 | 7,452 to 12,478 | 2,826 to 7,642 |
 
 Largest request: 14,996 tokens at the high estimate (9,698 low); Decision C requires a context window of at least 32,000.
 

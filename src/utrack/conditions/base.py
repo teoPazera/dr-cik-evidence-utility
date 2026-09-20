@@ -9,7 +9,7 @@ from dataclasses import dataclass
 
 # Bump when the rendering rules (Decision G) change, so a stored cell can be traced to the
 # rendering that produced its context. Previews record it in their header.
-RENDER_VERSION = "g-default-v1"
+RENDER_VERSION = "g-h2-v2"
 
 CONDITION_NAMES: dict[str, str] = {
     "C0": "no-context",
@@ -31,4 +31,5 @@ class Condition:
     source_benchmark_id: str | None  # C3 only: the task the placebo evidence was taken from
     approx_tokens: int  # characters / 4, see data.audit.approx_token_count
     seed: int | None  # None when nothing random was involved (C0, C1)
+    target_approx_tokens: int | None = None  # C3 H2: target C1 context length (characters / 4)
     render_version: str = RENDER_VERSION

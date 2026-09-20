@@ -1,4 +1,4 @@
-"""Placebo assignment (Decision H1, default): evidence from a different task.
+"""Placebo assignment (Decision H1 + H2): evidence from a different task.
 
 The source is drawn from the dev tasks (only they have evidence) whose entity and variable both
 differ from the target's, so no task is its own placebo and the placebo is not about the same
@@ -12,6 +12,31 @@ import numpy as np
 
 from utrack.data.loader import Dataset
 from utrack.seeds import derive_seed
+
+
+def length_match_text(text: str, target_characters: int) -> str:
+    """Deterministically truncate or repeat whole evidence lines to match target length.
+
+    The target is the rendered C1 character count. Truncation happens at a line boundary
+    when possible; a source shorter than target is repeated line-by-line so H2 controls
+    prompt length without inventing semantic filler.
+    """
+    if target_characters <= 0:
+        return ""
+    lines = [line for line in text.splitlines() if line]
+    if not lines:
+        raise ValueError("placebo source has empty rendered evidence")
+    chunks: list[str] = []
+    index = 0
+    while len("\n".join(chunks)) < target_characters:
+        chunks.append(lines[index % len(lines)])
+        index += 1
+    rendered = "\n".join(chunks)
+    if len(rendered) <= target_characters:
+        return rendered
+    prefix = rendered[:target_characters]
+    boundary = prefix.rfind("\n")
+    return prefix if boundary <= 0 else prefix[:boundary]
 
 
 def placebo_seed(base_seed: int, benchmark_id: str) -> int:

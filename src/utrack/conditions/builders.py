@@ -8,7 +8,7 @@ and its documents through `Dataset.documents_by_task`, and nothing else from the
 from __future__ import annotations
 
 from utrack.conditions.base import CONDITION_NAMES, Condition
-from utrack.conditions.placebo import assign_placebo, placebo_seed
+from utrack.conditions.placebo import assign_placebo, length_match_text, placebo_seed
 from utrack.conditions.render import render_documents, render_evidence
 from utrack.data.audit import approx_token_count
 from utrack.data.loader import Dataset
@@ -24,6 +24,7 @@ def _condition(
     evidence_span_ids: tuple[str, ...] = (),
     source_benchmark_id: str | None = None,
     seed: int | None = None,
+    target_approx_tokens: int | None = None,
 ) -> Condition:
     return Condition(
         condition_id=condition_id,
@@ -35,6 +36,7 @@ def _condition(
         source_benchmark_id=source_benchmark_id,
         approx_tokens=approx_token_count(context) if context else 0,
         seed=seed,
+        target_approx_tokens=target_approx_tokens,
     )
 
 
@@ -55,7 +57,9 @@ def build_condition(condition_id: str, dataset: Dataset, benchmark_id: str, base
 
     if condition_id == "C3":
         source_id = assign_placebo(dataset, benchmark_id, base_seed)
-        text, span_ids = render_evidence(dataset.evidence(source_id))
+        source_text, span_ids = render_evidence(dataset.evidence(source_id))
+        target_text, _ = render_evidence(dataset.evidence(benchmark_id))
+        text = length_match_text(source_text, len(target_text))
         return _condition(
             "C3",
             benchmark_id,
@@ -63,6 +67,7 @@ def build_condition(condition_id: str, dataset: Dataset, benchmark_id: str, base
             evidence_span_ids=span_ids,
             source_benchmark_id=source_id,
             seed=placebo_seed(base_seed, benchmark_id),
+            target_approx_tokens=approx_token_count(target_text),
         )
 
     # C2 and C4 concatenate documents

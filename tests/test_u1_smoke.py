@@ -77,7 +77,7 @@ def test_run_smoke_reports_cell_and_store_progress(tmp_path, monkeypatch) -> Non
     events = []
     cfg = {"dataset": {"revision": "r"}, "conditions": {"seed": 1}}
     u1 = {"model": "m", "sampling": {"temperature": 1.0, "samples_per_cell": 1}, "n_retries": 3,
-          "cost_cap_usd": 5.0, "pricing_usd_per_million_tokens": {"input": 0.25, "output": 1.5}, "max_output_tokens": 8}
+          "cost_cap_usd": 5.0, "pricing_usd_per_million_tokens": {"input": 0.25, "cached_input": 0.025, "output": 1.5}, "max_output_tokens": 8}
     run_smoke(tmp_path, _dataset(), cfg, u1, "test", tmp_path / "cells.jsonl", tmp_path / "manifest.json", events.append)
     names = [event["event"] for event in events]
     assert names.count("cell_started") == 2

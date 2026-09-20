@@ -145,6 +145,7 @@ class LiteLLMDirectForecaster:
         n_retries: int = 3,
         cost_cap_usd: float = 5.0,
         input_price_per_million: float = 0.25,
+        cached_input_price_per_million: float = 0.025,
         output_price_per_million: float = 1.50,
         max_output_tokens: int = 8000,
         client: ChatCompletionClient | None = None,
@@ -158,7 +159,10 @@ class LiteLLMDirectForecaster:
         self.model = model
         self.temperature = temperature
         self.n_retries = n_retries
+        if input_price_per_million < 0 or cached_input_price_per_million < 0 or output_price_per_million < 0:
+            raise ValueError("token prices cannot be negative")
         self.input_price_per_million = input_price_per_million
+        self.cached_input_price_per_million = cached_input_price_per_million
         self.output_price_per_million = output_price_per_million
         self.max_output_tokens = max_output_tokens
         self.ledger = ledger or CostLedger(cap_usd=cost_cap_usd)
@@ -206,6 +210,12 @@ class LiteLLMDirectForecaster:
         ]
 
     def _estimated_request_cost(self, prompt_tokens: int, max_output_tokens: int) -> float:
+        """Conservative pre-request cost.
+
+        Before a response arrives we cannot know whether Gemini will return a cache
+        hit, so budget all input at the higher uncached rate. Actual fallback
+        accounting below uses the reported cached-token count.
+        """
         return (
             prompt_tokens * self.input_price_per_million / 1_000_000
             + max_output_tokens * self.output_price_per_million / 1_000_000
@@ -220,20 +230,24 @@ class LiteLLMDirectForecaster:
         cached_tokens = int(_object_or_mapping(details, "cached_tokens", 0) or 0)
 
         response_cost_text = _header_value(response, "x-litellm-response-cost")
+        uncached_tokens = max(prompt_tokens - cached_tokens, 0)
         if response_cost_text is not None:
             cost = float(response_cost_text)
             source = "litellm_response_header"
+            input_cost = _float_header(response, "x-litellm-response-cost-input")
+            cache_read_cost = _float_header(response, "x-litellm-response-cost-cache-read")
+            output_cost = _float_header(response, "x-litellm-response-cost-output")
         else:
-            cost = (
-                prompt_tokens * self.input_price_per_million / 1_000_000
-                + completion_tokens * self.output_price_per_million / 1_000_000
-            )
-            source = "configured_token_prices"
+            input_cost = uncached_tokens * self.input_price_per_million / 1_000_000
+            cache_read_cost = cached_tokens * self.cached_input_price_per_million / 1_000_000
+            output_cost = completion_tokens * self.output_price_per_million / 1_000_000
+            cost = input_cost + cache_read_cost + output_cost
+            source = "configured_token_prices_cache_aware"
 
         components = {
-            "input_cost_usd": _float_header(response, "x-litellm-response-cost-input"),
-            "cache_read_cost_usd": _float_header(response, "x-litellm-response-cost-cache-read"),
-            "output_cost_usd": _float_header(response, "x-litellm-response-cost-output"),
+            "input_cost_usd": input_cost,
+            "cache_read_cost_usd": cache_read_cost,
+            "output_cost_usd": output_cost,
             "call_id": _header_value(response, "x-litellm-call-id"),
             "cost_source": source,
         }

@@ -115,6 +115,32 @@ def test_direct_forecaster_reproduces_cik_prompt_and_retries_invalid_output() ->
     assert out.sampling_params["provider_prompt_cache"]["enabled"] is True
 
 
+
+def test_direct_forecaster_fallback_prices_cached_tokens_at_cache_read_rate() -> None:
+    fi = _forecast_input()
+    response = _response(
+        "<forecast>\n(2026-01-01 02:00:00, 2)\n(2026-01-01 03:00:00, 3)\n</forecast>",
+        prompt_tokens=100, completion_tokens=10, cost=999.0,
+    )
+    response.headers = {}  # normal SDK path: token usage is available but LiteLLM cost headers are not
+    out = LiteLLMDirectForecaster(
+        client=FakeClient([response]),
+        n_retries=1,
+        cost_cap_usd=1.0,
+        input_price_per_million=0.25,
+        cached_input_price_per_million=0.025,
+        output_price_per_million=1.50,
+    ).forecast(fi, context=None, n_samples=1, seed=0)
+
+    # Usage fixture reports 97 cached and 3 uncached prompt tokens.
+    expected = 3 * 0.25 / 1_000_000 + 97 * 0.025 / 1_000_000 + 10 * 1.50 / 1_000_000
+    assert out.cost_usd == pytest.approx(expected)
+    request = out.sampling_params["request_costs"][0]
+    assert request["cost_source"] == "configured_token_prices_cache_aware"
+    assert request["input_cost_usd"] == pytest.approx(3 * 0.25 / 1_000_000)
+    assert request["cache_read_cost_usd"] == pytest.approx(97 * 0.025 / 1_000_000)
+    assert request["output_cost_usd"] == pytest.approx(10 * 1.50 / 1_000_000)
+
 def test_direct_forecaster_returns_incomplete_cell_when_cap_blocks_next_call() -> None:
     fi = _forecast_input()
     client = FakeClient([
